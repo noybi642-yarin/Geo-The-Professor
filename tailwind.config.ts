@@ -1,28 +1,15 @@
-// src/hooks/useDailyBrief.ts
-import { useState, useEffect } from "react";
-import type { DailyBrief } from "@/types";
+import type { Config } from "tailwindcss";
 
-export function useDailyBrief() {
-  const [brief, setBrief] = useState<DailyBrief | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+const config: Config = {
+  content: [
+    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+};
 
-  useEffect(() => {
-    async function fetchBrief() {
-      try {
-        const res = await fetch("/api/daily-brief");
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        setBrief(data);
-      } catch (err) {
-        setError("Failed to load daily brief");
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchBrief();
-  }, []);
-
-  return { brief, loading, error };
-}
+export default config;

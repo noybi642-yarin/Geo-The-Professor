@@ -1,0 +1,22 @@
+{
+  "crons": [
+    {
+      "path": "/api/daily-brief",
+      "schedule": "0 6 * * *"
+    }
+  ],
+  "functions": {
+    "src/app/api/chat/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/daily-brief/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/analyze-news/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/quiz/route.ts": {
+      "maxDuration": 10
+    }
+  }
+}

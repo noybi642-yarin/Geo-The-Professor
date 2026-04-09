@@ -1,7 +1,11 @@
-const config = {
-  plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  serverExternalPackages: ["@anthropic-ai/sdk"],
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "**" },
+    ],
   },
 };
-export default config;
+
+export default nextConfig;
