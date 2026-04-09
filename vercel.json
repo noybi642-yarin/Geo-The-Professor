@@ -1,62 +1,28 @@
-// src/hooks/useChat.ts
-import { useState, useCallback } from "react";
-import type { Message } from "@/types";
-
-export function useChat() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const history = messages.map((m) => ({ role: m.role, content: m.content }));
-
-  const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || loading) return;
-
-    const userMsg: Message = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      content: text,
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, userMsg]);
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, history: history.slice(-20) }),
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-
-      const assistantMsg: Message = {
-        id: `assistant-${Date.now()}`,
-        role: "assistant",
-        content: data.reply,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, assistantMsg]);
-    } catch (err) {
-      setError("Failed to get response. Please try again.");
-      const errMsg: Message = {
-        id: `error-${Date.now()}`,
-        role: "assistant",
-        content: "Connection issue — please try again.",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errMsg]);
-    } finally {
-      setLoading(false);
+{
+  "crons": [
+    {
+      "path": "/api/cron/daily-brief",
+      "schedule": "0 6 * * *"
     }
-  }, [loading, history]);
-
-  const clearMessages = useCallback(() => {
-    setMessages([]);
-    setError(null);
-  }, []);
-
-  return { messages, loading, error, sendMessage, clearMessages };
+  ],
+  "functions": {
+    "src/app/api/chat/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/daily-brief/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/cron/daily-brief/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/analyze-news/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/quiz/route.ts": {
+      "maxDuration": 10
+    },
+    "src/app/api/notifications/subscribe/route.ts": {
+      "maxDuration": 10
+    }
+  }
 }
