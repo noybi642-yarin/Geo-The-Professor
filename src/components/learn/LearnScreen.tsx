@@ -64,7 +64,12 @@ export default function LearnScreen({
           module_id: q.module_id,
         }),
       });
-      const data = await res.json();
+      const data = await res.json() as {
+        correct: boolean;
+        explanation: string;
+        correct_index: number;
+        xp_earned: number;
+      };
 
       if (data.correct && data.xp_earned) {
         addXP(data.xp_earned);

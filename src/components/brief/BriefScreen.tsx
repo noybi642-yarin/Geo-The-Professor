@@ -5,6 +5,21 @@ import { useDailyBrief } from "@/hooks/useDailyBrief";
 import Tag from "@/components/ui/Tag";
 import ActorChips from "@/components/ui/ActorChips";
 
+interface NewsAnalysis {
+  bias_score: number;
+  hidden_context?: string;
+  framing_bias?: string;
+  long_term_implications?: string;
+  related_history?: string;
+}
+
+const ANALYSIS_ROWS: Array<{ key: keyof Omit<NewsAnalysis, "bias_score">; label: string }> = [
+  { key: "hidden_context", label: "Hidden Context" },
+  { key: "framing_bias", label: "Framing Bias" },
+  { key: "long_term_implications", label: "Long-term Implications" },
+  { key: "related_history", label: "Historical Parallel" },
+];
+
 export default function BriefScreen({
   onAskProfessor,
 }: {
@@ -12,13 +27,7 @@ export default function BriefScreen({
 }) {
   const { brief, loading, error } = useDailyBrief();
   const [newsInput, setNewsInput] = useState("");
-  const [analysis, setAnalysis] = useState<{
-    bias_score: number;
-    hidden_context?: string;
-    framing_bias?: string;
-    long_term_implications?: string;
-    related_history?: string;
-  } | null>(null);
+  const [analysis, setAnalysis] = useState<NewsAnalysis | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
 
   async function analyzeNews() {
@@ -340,27 +349,21 @@ export default function BriefScreen({
                   fontSize: "20px",
                   fontWeight: 700,
                   color:
-                    (analysis.bias_score as number) > 60
+                    analysis.bias_score > 60
                       ? "var(--danger)"
-                      : (analysis.bias_score as number) > 30
+                      : analysis.bias_score > 30
                       ? "var(--gold)"
                       : "var(--teal)",
                 }}
               >
-                {analysis.bias_score as number}/100
+                {analysis.bias_score}/100
               </span>
             </div>
 
-            {(
-              [
-                { key: "hidden_context", label: "Hidden Context" },
-                { key: "framing_bias", label: "Framing Bias" },
-                { key: "long_term_implications", label: "Long-term Implications" },
-                { key: "related_history", label: "Historical Parallel" },
-              ] as { key: keyof typeof analysis; label: string }[]
-            ).map(
-              ({ key, label }) =>
-                analysis[key] && (
+            {ANALYSIS_ROWS.map(({ key, label }) => {
+                const value = analysis?.[key];
+                if (!value) return null;
+                return (
                   <div key={key} style={{ marginBottom: "12px" }}>
                     <div
                       style={{
@@ -381,11 +384,11 @@ export default function BriefScreen({
                         lineHeight: 1.65,
                       }}
                     >
-                      {analysis[key]}
+                      {value}
                     </p>
                   </div>
-                )
-            )}
+                );
+              })}
 
             <button
               onClick={() =>
