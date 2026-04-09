@@ -12,7 +12,13 @@ export default function BriefScreen({
 }) {
   const { brief, loading, error } = useDailyBrief();
   const [newsInput, setNewsInput] = useState("");
-  const [analysis, setAnalysis] = useState<Record<string, unknown> | null>(null);
+  const [analysis, setAnalysis] = useState<{
+    bias_score: number;
+    hidden_context?: string;
+    framing_bias?: string;
+    long_term_implications?: string;
+    related_history?: string;
+  } | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
 
   async function analyzeNews() {
@@ -345,12 +351,14 @@ export default function BriefScreen({
               </span>
             </div>
 
-            {[
-              { key: "hidden_context", label: "Hidden Context" },
-              { key: "framing_bias", label: "Framing Bias" },
-              { key: "long_term_implications", label: "Long-term Implications" },
-              { key: "related_history", label: "Historical Parallel" },
-            ].map(
+            {(
+              [
+                { key: "hidden_context", label: "Hidden Context" },
+                { key: "framing_bias", label: "Framing Bias" },
+                { key: "long_term_implications", label: "Long-term Implications" },
+                { key: "related_history", label: "Historical Parallel" },
+              ] as { key: keyof typeof analysis; label: string }[]
+            ).map(
               ({ key, label }) =>
                 analysis[key] && (
                   <div key={key} style={{ marginBottom: "12px" }}>
@@ -373,7 +381,7 @@ export default function BriefScreen({
                         lineHeight: 1.65,
                       }}
                     >
-                      {analysis[key] as string}
+                      {analysis[key]}
                     </p>
                   </div>
                 )
