@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { TabId } from "@/types";
+import SideNav from "@/components/ui/SideNav";
 import BottomNav from "@/components/ui/BottomNav";
 import TopBar from "@/components/ui/TopBar";
 import BriefScreen from "@/components/brief/BriefScreen";
@@ -19,39 +20,41 @@ export default function Home() {
   }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100dvh",
-        maxWidth: "430px",
-        margin: "0 auto",
-        background: "var(--bg)",
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
-      <TopBar />
+    <div className="app-shell">
+      {/* Desktop sidebar (hidden on mobile via CSS) */}
+      <SideNav activeTab={activeTab} onChange={setActiveTab} />
 
-      <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
-        <ScreenWrapper active={activeTab === "brief"}>
-          <BriefScreen onAskProfessor={handleAskProfessor} />
-        </ScreenWrapper>
-        <ScreenWrapper active={activeTab === "chat"}>
-          <ChatScreen
-            pendingQuestion={pendingChatQuestion}
-            onQuestionSent={() => setPendingChatQuestion(null)}
-          />
-        </ScreenWrapper>
-        <ScreenWrapper active={activeTab === "timeline"}>
-          <TimelineScreen onAskProfessor={handleAskProfessor} />
-        </ScreenWrapper>
-        <ScreenWrapper active={activeTab === "learn"}>
-          <LearnScreen onAskProfessor={handleAskProfessor} />
-        </ScreenWrapper>
+      {/* Main content area */}
+      <div className="app-main">
+        {/* Mobile top bar (hidden on desktop via CSS) */}
+        <div className="app-topbar">
+          <TopBar />
+        </div>
+
+        {/* Screen content */}
+        <div className="app-screens">
+          <ScreenWrapper active={activeTab === "brief"}>
+            <BriefScreen onAskProfessor={handleAskProfessor} />
+          </ScreenWrapper>
+          <ScreenWrapper active={activeTab === "chat"}>
+            <ChatScreen
+              pendingQuestion={pendingChatQuestion}
+              onQuestionSent={() => setPendingChatQuestion(null)}
+            />
+          </ScreenWrapper>
+          <ScreenWrapper active={activeTab === "timeline"}>
+            <TimelineScreen onAskProfessor={handleAskProfessor} />
+          </ScreenWrapper>
+          <ScreenWrapper active={activeTab === "learn"}>
+            <LearnScreen onAskProfessor={handleAskProfessor} />
+          </ScreenWrapper>
+        </div>
+
+        {/* Mobile bottom nav (hidden on desktop via CSS) */}
+        <div className="app-bottomnav">
+          <BottomNav activeTab={activeTab} onChange={setActiveTab} />
+        </div>
       </div>
-
-      <BottomNav activeTab={activeTab} onChange={setActiveTab} />
     </div>
   );
 }
@@ -69,7 +72,6 @@ function ScreenWrapper({
         position: "absolute",
         inset: 0,
         overflowY: "auto",
-        paddingBottom: "0",
         opacity: active ? 1 : 0,
         pointerEvents: active ? "all" : "none",
         transform: active ? "translateX(0)" : "translateX(20px)",

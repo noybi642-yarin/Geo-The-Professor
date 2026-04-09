@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Playfair_Display, DM_Sans } from "next/font/google";
 import { LangProvider } from "@/lib/LangContext";
+import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import "./globals.css";
 
 const playfair = Playfair_Display({
@@ -39,7 +40,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${playfair.variable} ${dmSans.variable}`}>
       <body>
-        <LangProvider>{children}</LangProvider>
+        <LangProvider>
+          <ServiceWorkerRegistrar />
+          {children}
+        </LangProvider>
       </body>
     </html>
   );

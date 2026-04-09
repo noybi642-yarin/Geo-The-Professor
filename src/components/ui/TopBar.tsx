@@ -1,6 +1,7 @@
 "use client";
 
 import { useLang } from "@/lib/LangContext";
+import NotificationBell from "@/components/ui/NotificationBell";
 
 export default function TopBar() {
   const { lang, setLang } = useLang();
@@ -29,22 +30,25 @@ export default function TopBar() {
         </div>
       </div>
 
-      <button
-        onClick={() => setLang(lang === "en" ? "he" : "en")}
-        style={{
-          fontSize: "12px",
-          fontWeight: 600,
-          color: "var(--text-2)",
-          border: "1px solid var(--border)",
-          borderRadius: "6px",
-          padding: "5px 10px",
-          background: "transparent",
-          cursor: "pointer",
-          letterSpacing: "0.04em",
-        }}
-      >
-        {lang === "en" ? "EN" : "HE"}
-      </button>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <NotificationBell />
+        <button
+          onClick={() => setLang(lang === "en" ? "he" : "en")}
+          style={{
+            fontSize: "12px",
+            fontWeight: 600,
+            color: "var(--text-2)",
+            border: "1px solid var(--border)",
+            borderRadius: "6px",
+            padding: "5px 10px",
+            background: "transparent",
+            cursor: "pointer",
+            letterSpacing: "0.04em",
+          }}
+        >
+          {lang === "en" ? "EN" : "HE"}
+        </button>
+      </div>
     </div>
   );
 }

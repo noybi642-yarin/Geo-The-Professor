@@ -157,3 +157,83 @@ body {
   border-color: var(--purple);
   background: rgba(184, 133, 245, 0.2);
 }
+
+/* ─── Responsive Layout ─────────────────────────────────────── */
+
+/* Mobile-first: full screen column layout */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.app-sidenav {
+  display: none; /* hidden on mobile */
+}
+
+.app-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  /* Mobile: constrain to phone width, centered */
+  max-width: 430px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.app-screens {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.app-topbar {
+  flex-shrink: 0;
+}
+
+.app-bottomnav {
+  flex-shrink: 0;
+}
+
+/* Desktop: sidebar + main side-by-side */
+@media (min-width: 768px) {
+  body {
+    background: var(--bg-2); /* subtle framing on desktop */
+  }
+
+  .app-shell {
+    flex-direction: row;
+    max-width: 1100px;
+    margin: 0 auto;
+    border-left: 1px solid var(--border-subtle);
+    border-right: 1px solid var(--border-subtle);
+    background: var(--bg);
+  }
+
+  .app-sidenav {
+    display: flex;
+    flex-direction: column;
+    width: 220px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border-subtle);
+    padding: 28px 16px 20px;
+    gap: 2px;
+    overflow: hidden;
+  }
+
+  .app-main {
+    flex: 1;
+    max-width: none;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  /* Hide mobile-only elements */
+  .app-topbar,
+  .app-bottomnav {
+    display: none;
+  }
+}

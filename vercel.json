@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/daily-brief",
+      "path": "/api/cron/daily-brief",
       "schedule": "0 6 * * *"
     }
   ],
@@ -12,10 +12,16 @@
     "src/app/api/daily-brief/route.ts": {
       "maxDuration": 60
     },
+    "src/app/api/cron/daily-brief/route.ts": {
+      "maxDuration": 60
+    },
     "src/app/api/analyze-news/route.ts": {
       "maxDuration": 30
     },
     "src/app/api/quiz/route.ts": {
+      "maxDuration": 10
+    },
+    "src/app/api/notifications/subscribe/route.ts": {
       "maxDuration": 10
     }
   }
