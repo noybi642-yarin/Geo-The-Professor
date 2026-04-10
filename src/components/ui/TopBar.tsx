@@ -46,7 +46,7 @@ export default function TopBar() {
             letterSpacing: "0.04em",
           }}
         >
-          {lang === "en" ? "EN" : "HE"}
+          {lang === "en" ? "עב" : "EN"}
         </button>
       </div>
     </div>

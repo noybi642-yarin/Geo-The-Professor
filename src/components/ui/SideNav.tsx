@@ -100,7 +100,7 @@ export default function SideNav({
             letterSpacing: "0.04em",
           }}
         >
-          {lang === "en" ? "EN" : "HE"}
+          {lang === "en" ? "עב" : "EN"}
         </button>
         <NotificationBell />
       </div>
