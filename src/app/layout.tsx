@@ -1,36 +1,28 @@
 import type { Metadata, Viewport } from "next";
-import { Playfair_Display, DM_Sans } from "next/font/google";
-import { LangProvider } from "@/lib/LangContext";
-import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import { Heebo } from "next/font/google";
 import "./globals.css";
 
-const playfair = Playfair_Display({
-  subsets: ["latin"],
-  variable: "--font-playfair",
+const heebo = Heebo({
+  subsets: ["hebrew", "latin"],
+  weight: ["300", "400", "500", "600", "700", "800"],
+  variable: "--font-heebo",
   display: "swap",
-});
-
-const dmSans = DM_Sans({
-  subsets: ["latin"],
-  variable: "--font-dm-sans",
-  display: "swap",
-  weight: ["300", "400", "500"],
 });
 
 export const metadata: Metadata = {
-  title: "GeoProfessor: Middle East",
-  description: "AI-powered Middle East geopolitics — explained by your professor.",
-  keywords: ["Middle East", "geopolitics", "Israel", "Palestine", "Iran", "history", "AI"],
+  title: "שלום נוי — בואי נחשב יחד 💙",
+  description:
+    "מחשבון מימון רכב אישי: החזר חודשי, בלון, ריבית, אחוז מימון, מקדמה ולוח סילוקין — בזמן אמת מול הלקוח.",
   openGraph: {
-    title: "GeoProfessor: Middle East",
-    description: "Understand the most complex region on earth.",
+    title: "שלום נוי — בואי נחשב יחד 💙",
+    description: "מחשבון מימון רכב אישי, מהיר ומדויק.",
     type: "website",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0c10",
-  colorScheme: "dark",
+  themeColor: "#0b2a5e",
+  colorScheme: "light",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -38,13 +30,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${playfair.variable} ${dmSans.variable}`}>
-      <body>
-        <LangProvider>
-          <ServiceWorkerRegistrar />
-          {children}
-        </LangProvider>
-      </body>
+    <html lang="he" dir="rtl" className={heebo.variable}>
+      <body>{children}</body>
     </html>
   );
 }
