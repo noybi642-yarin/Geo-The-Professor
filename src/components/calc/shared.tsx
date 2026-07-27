@@ -62,6 +62,7 @@ export function NumField({
   chipSuffix = "",
   onChip,
   activeChip,
+  allowNegative,
 }: {
   label: string;
   value: string;
@@ -75,6 +76,7 @@ export function NumField({
   chipSuffix?: string;
   onChip?: (v: number) => void;
   activeChip?: number;
+  allowNegative?: boolean;
 }) {
   return (
     <div className="field">
@@ -105,7 +107,7 @@ export function NumField({
           inputMode="decimal"
           value={value}
           placeholder={placeholder ?? "0"}
-          onChange={(e) => onChange(formatTyped(e.target.value))}
+          onChange={(e) => onChange(formatTyped(e.target.value, allowNegative))}
         />
         {suffix && <span className="field-suffix">{suffix}</span>}
       </div>
@@ -200,7 +202,9 @@ export function ResultHero({
       title="לחיצה מעתיקה"
     >
       <span className="hero-label">{label}</span>
-      <span className="hero-value">{value}</span>
+      <span className="hero-value" dir="auto">
+        {value}
+      </span>
       {sub && <span className="hero-sub">{sub}</span>}
     </button>
   );

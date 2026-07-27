@@ -4,24 +4,54 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import {
   ACCENTS,
   DEFAULT_SETTINGS,
+  PRODUCT_INFO,
   parseNum,
   toInput,
   formatTyped,
+  type ProductType,
   type Settings,
 } from "@/lib/finance";
 import { Modal, ToastContext } from "./shared";
 import LoanCalc from "./LoanCalc";
+import BalloonSpreadCalc from "./BalloonSpreadCalc";
+import IndexCalc from "./IndexCalc";
+import TracksInfo from "./TracksInfo";
 import { BalloonCalc, DownCalc, FinPctCalc, InterestCalc } from "./SimpleCalcs";
 
-type CalcId = "loan" | "interest" | "finpct" | "down" | "balloon";
+type CalcId =
+  | "loan"
+  | "index"
+  | "spread"
+  | "tracks"
+  | "interest"
+  | "finpct"
+  | "down"
+  | "balloon";
 
-const CALCS: { id: CalcId; icon: string; title: string; desc: string }[] = [
-  { id: "loan", icon: "🚗", title: "החזר חודשי", desc: "חישוב מלא של עסקת מימון — כולל בלון ולוח סילוקין" },
+interface CalcMeta {
+  id: CalcId;
+  icon: string;
+  title: string;
+  desc: string;
+}
+
+/** ארבעת האזורים המרכזיים */
+const MAIN_CALCS: CalcMeta[] = [
+  { id: "loan", icon: "🚗", title: "בניית עסקת מימון", desc: "מסלול, ריבית, בלון ועמלת הקמה — עם לוח סילוקין" },
+  { id: "index", icon: "📊", title: "עדכון תשלום לפי מדד", desc: "עדכון החזר לפי ערך מדד, אחוזים או נקודות" },
+  { id: "spread", icon: "🎈", title: "פריסת יתרת בלון", desc: "המשך תשלומים על יתרת הבלון בסוף העסקה" },
+  { id: "tracks", icon: "📚", title: "הכרת המסלולים", desc: "Drive, Extra Lease, Fix ו-Express — טווחים ותנאים" },
+];
+
+/** מחשבונים מהירים משלימים */
+const QUICK_CALCS: CalcMeta[] = [
   { id: "interest", icon: "💰", title: "מחשבון ריבית", desc: "כמה ריבית וכמה קרן ישולמו בהלוואה" },
   { id: "finpct", icon: "📈", title: "אחוז מימון", desc: "אחוז המימון לפי מחיר הרכב והמקדמה" },
   { id: "down", icon: "💵", title: "מחשבון מקדמה", desc: "כמה מקדמה צריך לפי אחוז המימון" },
   { id: "balloon", icon: "📊", title: "מחשבון בלון", desc: "סכום הבלון וההלוואה לאחר המקדמה" },
 ];
+
+const CALCS: CalcMeta[] = [...MAIN_CALCS, ...QUICK_CALCS];
 
 const SETTINGS_KEY = "sn.settings.v1";
 
@@ -95,34 +125,56 @@ export default function CalcApp() {
 
         <main className="sn-container">
           {!active && (
-            <div className="sn-grid" key="home">
-              {CALCS.map((c, idx) => (
+            <div key="home">
+              <div className="sn-grid main-grid">
+                {MAIN_CALCS.map((c, idx) => (
+                  <button
+                    type="button"
+                    key={c.id}
+                    className="sn-tile"
+                    style={{ animationDelay: `${idx * 45}ms` }}
+                    onClick={() => setScreen(c.id)}
+                  >
+                    <span className="tile-icon">{c.icon}</span>
+                    <span className="tile-title">{c.title}</span>
+                    <span className="tile-desc">{c.desc}</span>
+                  </button>
+                ))}
+              </div>
+
+              <h2 className="section-head">מחשבונים מהירים</h2>
+              <div className="sn-grid">
+                {QUICK_CALCS.map((c, idx) => (
+                  <button
+                    type="button"
+                    key={c.id}
+                    className="sn-tile"
+                    style={{ animationDelay: `${(MAIN_CALCS.length + idx) * 45}ms` }}
+                    onClick={() => setScreen(c.id)}
+                  >
+                    <span className="tile-icon">{c.icon}</span>
+                    <span className="tile-title">{c.title}</span>
+                    <span className="tile-desc">{c.desc}</span>
+                  </button>
+                ))}
                 <button
                   type="button"
-                  key={c.id}
-                  className="sn-tile"
-                  style={{ animationDelay: `${idx * 45}ms` }}
-                  onClick={() => setScreen(c.id)}
+                  className="sn-tile tile-settings"
+                  style={{ animationDelay: `${CALCS.length * 45}ms` }}
+                  onClick={() => setShowSettings(true)}
                 >
-                  <span className="tile-icon">{c.icon}</span>
-                  <span className="tile-title">{c.title}</span>
-                  <span className="tile-desc">{c.desc}</span>
+                  <span className="tile-icon">⚙️</span>
+                  <span className="tile-title">הגדרות</span>
+                  <span className="tile-desc">עמלת הקמה, ריבית, צבעים ואחוזי מימון</span>
                 </button>
-              ))}
-              <button
-                type="button"
-                className="sn-tile tile-settings"
-                style={{ animationDelay: `${CALCS.length * 45}ms` }}
-                onClick={() => setShowSettings(true)}
-              >
-                <span className="tile-icon">⚙️</span>
-                <span className="tile-title">הגדרות</span>
-                <span className="tile-desc">עמלת הקמה, ריבית, צבעים ואחוזי מימון</span>
-              </button>
+              </div>
             </div>
           )}
 
           {screen === "loan" && <LoanCalc settings={settings} />}
+          {screen === "index" && <IndexCalc />}
+          {screen === "spread" && <BalloonSpreadCalc settings={settings} />}
+          {screen === "tracks" && <TracksInfo />}
           {screen === "interest" && <InterestCalc settings={settings} />}
           {screen === "finpct" && <FinPctCalc />}
           {screen === "down" && <DownCalc settings={settings} />}
@@ -166,8 +218,39 @@ function SettingsModal({
   const [fee, setFee] = useState(toInput(settings.fee));
   const [rate, setRate] = useState(toInput(settings.defaultRate));
   const [pcts, setPcts] = useState(settings.commonPcts.join(", "));
+  const [primeBase, setPrimeBase] = useState(toInput(settings.primeBase));
+  const [primeMargin, setPrimeMargin] = useState(toInput(settings.primeMargin));
+  const [cpi, setCpi] = useState(toInput(settings.defaultCpi));
+  const [spreadRate, setSpreadRate] = useState(toInput(settings.spreadRate));
 
   const commit = (patch: Partial<Settings>) => onChange({ ...settings, ...patch });
+
+  const numField = (
+    label: string,
+    value: string,
+    setValue: (v: string) => void,
+    key: keyof Settings,
+    suffix: string,
+    opts?: { allowNegative?: boolean; hint?: string }
+  ) => (
+    <div className="field">
+      <label className="field-label">{label}</label>
+      <div className="field-box">
+        <input
+          type="text"
+          inputMode="decimal"
+          value={value}
+          onChange={(e) => {
+            const v = formatTyped(e.target.value, opts?.allowNegative);
+            setValue(v);
+            commit({ [key]: parseNum(v) } as Partial<Settings>);
+          }}
+        />
+        <span className="field-suffix">{suffix}</span>
+      </div>
+      {opts?.hint && <div className="field-hint">{opts.hint}</div>}
+    </div>
+  );
 
   const parsePcts = (s: string) =>
     Array.from(
@@ -182,39 +265,37 @@ function SettingsModal({
   return (
     <Modal title="⚙️ הגדרות" onClose={onClose}>
       <div className="settings">
+        {numField("עמלת הקמה (ברירת מחדל)", fee, setFee, "fee", "₪")}
+        {numField("ריבית שנתית (ברירת מחדל)", rate, setRate, "defaultRate", "%")}
+
         <div className="field">
-          <label className="field-label">עמלת הקמה (ברירת מחדל)</label>
-          <div className="field-box">
-            <input
-              type="text"
-              inputMode="decimal"
-              value={fee}
-              onChange={(e) => {
-                const v = formatTyped(e.target.value);
-                setFee(v);
-                commit({ fee: parseNum(v) });
-              }}
-            />
-            <span className="field-suffix">₪</span>
+          <label className="field-label">מוצר מימון ברירת מחדל</label>
+          <div className="seg seg-3">
+            {(Object.keys(PRODUCT_INFO) as ProductType[]).map((p) => (
+              <button
+                key={p}
+                type="button"
+                className={settings.defaultProduct === p ? "on" : ""}
+                onClick={() => commit({ defaultProduct: p })}
+              >
+                {PRODUCT_INFO[p].label}
+              </button>
+            ))}
+          </div>
+          <div className="field-hint">
+            שיטת הסילוקין נגזרת מהמוצר: פריים — קרן שווה; קבועה וצמודת מדד — שפיצר
           </div>
         </div>
 
-        <div className="field">
-          <label className="field-label">ריבית שנתית (ברירת מחדל)</label>
-          <div className="field-box">
-            <input
-              type="text"
-              inputMode="decimal"
-              value={rate}
-              onChange={(e) => {
-                const v = formatTyped(e.target.value);
-                setRate(v);
-                commit({ defaultRate: parseNum(v) });
-              }}
-            />
-            <span className="field-suffix">%</span>
-          </div>
-        </div>
+        {numField("ריבית הפריים הבסיסית", primeBase, setPrimeBase, "primeBase", "%")}
+        {numField("מרווח מהפריים", primeMargin, setPrimeMargin, "primeMargin", "%", {
+          allowNegative: true,
+          hint: `הריבית במוצר פריים = פריים בסיסי + מרווח (לדוגמה: פריים מינוס 0.5% = ‎-0.5). כרגע: ${toInput(settings.primeBase) || "0"}% + ${toInput(settings.primeMargin) || "0"}%`,
+        })}
+        {numField("הנחת מדד שנתית (ברירת מחדל)", cpi, setCpi, "defaultCpi", "%", {
+          hint: "משמשת את התחזית במוצר צמוד מדד",
+        })}
+        {numField("ריבית ברירת מחדל לפריסת בלון", spreadRate, setSpreadRate, "spreadRate", "%")}
 
         <div className="field">
           <label className="field-label">שיטת חישוב ריבית חודשית</label>
@@ -280,6 +361,10 @@ function SettingsModal({
             setFee(toInput(DEFAULT_SETTINGS.fee));
             setRate(toInput(DEFAULT_SETTINGS.defaultRate));
             setPcts(DEFAULT_SETTINGS.commonPcts.join(", "));
+            setPrimeBase(toInput(DEFAULT_SETTINGS.primeBase));
+            setPrimeMargin(toInput(DEFAULT_SETTINGS.primeMargin));
+            setCpi(toInput(DEFAULT_SETTINGS.defaultCpi));
+            setSpreadRate(toInput(DEFAULT_SETTINGS.spreadRate));
             notify("ההגדרות אופסו ✨");
           }}
         >
