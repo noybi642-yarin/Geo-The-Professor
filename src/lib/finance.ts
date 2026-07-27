@@ -431,6 +431,236 @@ export function estimateEndDate(months: number, startISO?: string): string {
   return new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric" }).format(end);
 }
 
+// ─── עמלת הקמה ופריסתה ─────────────────────────────────────────
+
+export type FeeMode = "upfront" | "spread" | "full-term";
+
+export interface FeePlan {
+  fee: number;
+  mode: FeeMode;
+  /** מספר החודשים שעליהם נפרסת העמלה (0 = תשלום חד-פעמי) */
+  months: number;
+  /** התוספת החודשית הקבועה (מעוגלת לאגורות) */
+  monthly: number;
+  /** התוספת בחודש האחרון של הפריסה — סופגת את פערי האגורות */
+  lastMonthly: number;
+  /** התוספת בתשלום הראשון (העמלה המלאה בתשלום חד-פעמי) */
+  firstAddition: number;
+}
+
+/**
+ * פריסת עמלת הקמה ללא ריבית:
+ * תוספת חודשית = עמלת הקמה / מספר תשלומי הפריסה.
+ * פערי אגורות מתוקנים בתשלום האחרון של העמלה.
+ */
+export function planSetupFee(
+  fee: number,
+  mode: FeeMode,
+  spreadCount: number,
+  loanMonths: number
+): FeePlan {
+  const safeFee = fee > 0 ? fee : 0;
+  if (safeFee === 0 || mode === "upfront") {
+    return {
+      fee: safeFee,
+      mode: "upfront",
+      months: 0,
+      monthly: 0,
+      lastMonthly: 0,
+      firstAddition: safeFee,
+    };
+  }
+
+  const raw = mode === "full-term" ? loanMonths : spreadCount;
+  const n = Math.max(1, Math.min(Math.round(raw || 0), Math.round(loanMonths) || Infinity));
+  const monthly = round2(safeFee / n);
+  // התשלום האחרון של העמלה סוגר את ההפרש המצטבר של העיגול
+  const lastMonthly = round2(safeFee - monthly * (n - 1));
+
+  return {
+    fee: safeFee,
+    mode,
+    months: n,
+    monthly,
+    lastMonthly,
+    firstAddition: n === 1 ? lastMonthly : monthly,
+  };
+}
+
+export interface FeeApplied {
+  /** התשלום הראשון בפועל: החזר הלוואה + רכיב עמלה */
+  firstPayment: number;
+  /** התשלום בפועל בזמן פריסת העמלה (חודש שוטף) */
+  paymentDuringFee: number;
+  /** התשלום לאחר שהעמלה סיימה להיפרס */
+  paymentAfterFee: number;
+  /** סך העמלה */
+  totalFee: number;
+}
+
+/** שילוב תוכנית העמלה עם תוצאת ההלוואה — להצגה נפרדת בממשק */
+export function applyFeeToLoan(loan: LoanSummary, plan: FeePlan): FeeApplied {
+  // firstPayment של המנוע כבר כולל fee=0, ולכן מחושב כאן מחדש
+  const loanFirst = loan.schedule.length ? loan.schedule[0].payment : 0;
+  const loanRegular = loan.method === "equal-principal" ? loanFirst : loan.monthly;
+  return {
+    firstPayment: loanFirst + plan.firstAddition,
+    paymentDuringFee: plan.months > 0 ? loanRegular + plan.monthly : loanRegular,
+    paymentAfterFee: loanRegular,
+    totalFee: plan.fee,
+  };
+}
+
+// ─── חישובי מדד ────────────────────────────────────────────────
+
+export type IndexChangeKind = "value" | "percent" | "points";
+
+export interface IndexChange {
+  kind: IndexChangeKind;
+  /** ערך מדד חדש / שינוי באחוזים / שינוי בנקודות */
+  value: number;
+  label?: string;
+}
+
+/** מקדם הצמדה: מדד חדש / מדד בסיס */
+export function indexFactor(baseIndex: number, newIndex: number): number {
+  if (!(baseIndex > 0)) return 1;
+  return newIndex / baseIndex;
+}
+
+/** המדד החדש הנובע משינוי בודד מתוך מדד קודם */
+export function nextIndex(prevIndex: number, change: IndexChange): number {
+  switch (change.kind) {
+    case "value":
+      return change.value;
+    case "percent":
+      return prevIndex * (1 + change.value / 100);
+    case "points":
+      return prevIndex + change.value;
+  }
+}
+
+export interface IndexStep {
+  step: number;
+  prevIndex: number;
+  changeText: string;
+  newIndex: number;
+  /** שינוי מצטבר מול מדד הבסיס, באחוזים */
+  cumulativePct: number;
+  factor: number;
+  payment: number;
+  /** הפרש מהחודש הקודם */
+  diffFromPrev: number;
+  /** הפרש מההחזר המקורי */
+  diffFromBase: number;
+  /** האם הופעלה רצפת מדד הבסיס בשלב הזה */
+  floored?: boolean;
+}
+
+export interface IndexResult {
+  ok: boolean;
+  error?: string;
+  baseIndex: number;
+  finalIndex: number;
+  factor: number;
+  cumulativePct: number;
+  basePayment: number;
+  newPayment: number;
+  diff: number;
+  direction: "up" | "down" | "same";
+  newPrincipal?: number;
+  newBalloon?: number;
+  steps: IndexStep[];
+}
+
+const changeText = (c: IndexChange): string => {
+  if (c.kind === "value") return `מדד חדש: ${round2(c.value)}`;
+  if (c.kind === "percent")
+    return `${c.value >= 0 ? "עלייה" : "ירידה"} של ${Math.abs(round2(c.value))}%`;
+  return `${c.value >= 0 ? "עלייה" : "ירידה"} של ${Math.abs(round2(c.value))} נק׳`;
+};
+
+/**
+ * עדכון החזר לפי שינויי מדד — בודד או מצטבר.
+ * floorAtBase: מתג אופציונלי שמונע ירידת המדד מתחת למדד הבסיס.
+ * אין מנגנון רצפה כברירת מחדל.
+ */
+export function applyIndexChanges(
+  baseIndex: number,
+  basePayment: number,
+  changes: IndexChange[],
+  opts: { floorAtBase?: boolean; principal?: number; balloon?: number } = {}
+): IndexResult {
+  const empty: IndexResult = {
+    ok: false,
+    baseIndex,
+    finalIndex: baseIndex,
+    factor: 1,
+    cumulativePct: 0,
+    basePayment,
+    newPayment: basePayment,
+    diff: 0,
+    direction: "same",
+    steps: [],
+  };
+
+  if (!(baseIndex > 0)) return { ...empty, error: "יש להזין מדד בסיס גדול מאפס" };
+  if (!(basePayment > 0)) return { ...empty, error: "יש להזין החזר חודשי בסיסי" };
+  const valid = changes.filter((c) => Number.isFinite(c.value));
+  if (valid.length === 0) return { ...empty, error: "יש להזין לפחות שינוי מדד אחד" };
+
+  const steps: IndexStep[] = [];
+  let idx = baseIndex;
+  let prevPayment = basePayment;
+
+  for (let k = 0; k < valid.length; k++) {
+    const c = valid[k];
+    const prevIndex = idx;
+    const next = nextIndex(prevIndex, c);
+    if (!Number.isFinite(next) || next <= 0)
+      return { ...empty, error: "ערכי המדד שהוזנו אינם תקינים" };
+
+    // מסלול המדד עצמו נשמר תמיד אמיתי; הרצפה מוחלת על מקדם ההצמדה
+    // בלבד — כך ירידה זמנית אינה מאפסת את נקודת ההתחלה של העליות הבאות
+    idx = next;
+    const floored = !!opts.floorAtBase && idx < baseIndex;
+    const factor = indexFactor(baseIndex, floored ? baseIndex : idx);
+    const payment = basePayment * factor;
+    steps.push({
+      step: k + 1,
+      prevIndex,
+      changeText: changeText(c),
+      newIndex: idx,
+      cumulativePct: (factor - 1) * 100,
+      factor,
+      payment,
+      diffFromPrev: payment - prevPayment,
+      diffFromBase: payment - basePayment,
+      floored,
+    });
+    prevPayment = payment;
+  }
+
+  const flooredFinal = !!opts.floorAtBase && idx < baseIndex;
+  const factor = indexFactor(baseIndex, flooredFinal ? baseIndex : idx);
+  const newPayment = basePayment * factor;
+  const diff = newPayment - basePayment;
+  return {
+    ok: true,
+    baseIndex,
+    finalIndex: idx,
+    factor,
+    cumulativePct: (factor - 1) * 100,
+    basePayment,
+    newPayment,
+    diff,
+    direction: Math.abs(diff) < 0.005 ? "same" : diff > 0 ? "up" : "down",
+    newPrincipal: opts.principal && opts.principal > 0 ? opts.principal * factor : undefined,
+    newBalloon: opts.balloon && opts.balloon > 0 ? opts.balloon * factor : undefined,
+    steps,
+  };
+}
+
 // ─── תאימות לאחור: החתימה הישנה של calcLoan ────────────────────
 
 export interface LoanResult extends LoanSummary {}

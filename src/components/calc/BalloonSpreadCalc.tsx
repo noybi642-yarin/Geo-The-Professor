@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
+  applyFeeToLoan,
   balloonSpreadByMonths,
   balloonSpreadByPayment,
   copyText,
@@ -10,8 +11,10 @@ import {
   fmtNum,
   fmtPct,
   parseNum,
+  planSetupFee,
   round2,
   toInput,
+  type FeeMode,
   type Settings,
 } from "@/lib/finance";
 import {
@@ -35,6 +38,8 @@ interface SpreadForm {
   months: string;
   payment: string; // התשלום החודשי הקיים (במצב "שמירה על תשלום")
   prevPayment: string; // ההחזר הקודם להשוואה (במצב "לפי חודשים")
+  feeMode: FeeMode;
+  feeSpreadCount: string;
 }
 
 const INITIAL: SpreadForm = {
@@ -46,6 +51,8 @@ const INITIAL: SpreadForm = {
   months: "36",
   payment: "",
   prevPayment: "",
+  feeMode: "upfront",
+  feeSpreadCount: "12",
 };
 
 export default function BalloonSpreadCalc({ settings }: { settings: Settings }) {
@@ -62,11 +69,22 @@ export default function BalloonSpreadCalc({ settings }: { settings: Settings }) 
   const monthsN = parseNum(f.months);
   const paymentN = parseNum(f.payment);
 
+  // המנוע מקבל fee=0; עמלת ההקמה מוצגת ונפרסת בנפרד
   const res = useMemo(() => {
     if (f.mode === "months")
-      return { ...balloonSpreadByMonths(balanceN, rateN, monthsN, feeN, settings.rateMethod), fullMonths: Math.round(monthsN) };
-    return balloonSpreadByPayment(balanceN, rateN, paymentN, feeN, settings.rateMethod);
-  }, [f.mode, balanceN, rateN, monthsN, paymentN, feeN, settings.rateMethod]);
+      return {
+        ...balloonSpreadByMonths(balanceN, rateN, monthsN, 0, settings.rateMethod),
+        fullMonths: Math.round(monthsN),
+      };
+    return balloonSpreadByPayment(balanceN, rateN, paymentN, 0, settings.rateMethod);
+  }, [f.mode, balanceN, rateN, monthsN, paymentN, settings.rateMethod]);
+
+  const feePlan = useMemo(
+    () => planSetupFee(feeN, f.feeMode, parseNum(f.feeSpreadCount), res.ok ? res.months : 0),
+    [feeN, f.feeMode, f.feeSpreadCount, res]
+  );
+  const feeApplied = res.ok ? applyFeeToLoan(res, feePlan) : null;
+  const totalWithFee = res.ok ? round2(res.totalPaid + feeN) : 0;
 
   const endDate = res.ok ? estimateEndDate(res.months, f.startDate || undefined) : "—";
 
@@ -82,7 +100,7 @@ export default function BalloonSpreadCalc({ settings }: { settings: Settings }) 
       : `פריסת יתרה של ${fmtMoney(balanceN)} בריבית שנתית של ${fmtPct(rateN)} על פני ${fmtNum(res.months)} חודשים תעמיד החזר חודשי של ${fmtMoney(res.monthly)} ותוסיף כ־${fmtMoney(extraCost)} בעלויות ריבית.`;
 
   const copyForClient = async () => {
-    if (!res.ok) {
+    if (!res.ok || !feeApplied) {
       notify(res.error ?? "אין נתונים להעתקה");
       return;
     }
@@ -93,12 +111,16 @@ export default function BalloonSpreadCalc({ settings }: { settings: Settings }) 
       `🔹 ריבית שנתית: ${fmtPct(rateN)}`,
       `🔹 תקופת הפריסה: ${fmtNum(res.months)} חודשים`,
       `💳 החזר חודשי: ${fmtMoney(f.mode === "payment" ? paymentN : res.monthly)}`,
-      feeN > 0 ? `💰 תשלום ראשון (כולל עמלת הקמה): ${fmtMoney(res.firstPayment)}` : "",
+      feeN > 0 ? `🧾 עמלת הקמה: ${fmtMoney(feeN)}` : "",
+      `💰 תשלום ראשון: ${fmtMoney(feeApplied.firstPayment)}`,
+      feePlan.months > 1
+        ? `💰 תשלום לאחר סיום פריסת העמלה: ${fmtMoney(feeApplied.paymentAfterFee)}`
+        : "",
       f.mode === "payment" && res.lastPayment < paymentN - 0.005
         ? `💳 תשלום אחרון: ${fmtMoney(res.lastPayment)}`
         : "",
       `📈 סך הריבית בפריסה: ${fmtMoney(res.totalInterest)}`,
-      `📊 סך התשלום הכולל: ${fmtMoney(res.totalPaid)}`,
+      `📊 סך התשלום הכולל: ${fmtMoney(totalWithFee)}`,
       `🗓️ מועד סיום משוער: ${endDate}`,
       "―――――――――――――――",
       summarySentence,
@@ -187,12 +209,52 @@ export default function BalloonSpreadCalc({ settings }: { settings: Settings }) 
           )}
 
           <NumField
-            label="עמלת הקמה חד-פעמית"
+            label="עמלת הקמה"
             value={f.fee}
             onChange={(v) => set({ fee: v })}
             suffix="₪"
             placeholder={toInput(settings.fee) || "0"}
           />
+          <div className="field">
+            <div className="field-head">
+              <label className="field-label">אופן תשלום העמלה</label>
+            </div>
+            <div className="seg seg-3">
+              <button
+                type="button"
+                className={f.feeMode === "upfront" ? "on" : ""}
+                onClick={() => set({ feeMode: "upfront" })}
+              >
+                חד-פעמי בתחילת הפריסה
+              </button>
+              <button
+                type="button"
+                className={f.feeMode === "spread" ? "on" : ""}
+                onClick={() => set({ feeMode: "spread" })}
+              >
+                פריסה למספר תשלומים
+              </button>
+              <button
+                type="button"
+                className={f.feeMode === "full-term" ? "on" : ""}
+                onClick={() => set({ feeMode: "full-term" })}
+              >
+                פריסה לכל התקופה
+              </button>
+            </div>
+            <div className="field-hint">הפריסה היא ללא ריבית</div>
+          </div>
+          {f.feeMode === "spread" && (
+            <NumField
+              label="מספר תשלומי פריסה"
+              value={f.feeSpreadCount}
+              onChange={(v) => set({ feeSpreadCount: v })}
+              suffix="תש׳"
+              chips={[3, 6, 12, 24]}
+              activeChip={parseNum(f.feeSpreadCount)}
+              onChip={(c) => set({ feeSpreadCount: String(c) })}
+            />
+          )}
           <div className="field">
             <div className="field-head">
               <label className="field-label">תאריך תחילת הפריסה (לא חובה)</label>
@@ -211,7 +273,7 @@ export default function BalloonSpreadCalc({ settings }: { settings: Settings }) 
 
       <section className="panel" id="spread-results">
         <h2 className="panel-title">💙 תוצאות</h2>
-        {res.ok ? (
+        {res.ok && feeApplied ? (
           <>
             <div className="meta-badges">
               <span className="badge">🧮 שפיצר</span>
@@ -237,9 +299,30 @@ export default function BalloonSpreadCalc({ settings }: { settings: Settings }) 
 
             <div className="result-list">
               <ResultRow
-                label="תשלום ראשון (כולל עמלת הקמה)"
-                value={fmtMoney(res.firstPayment)}
+                label="החזר הלוואה (ללא עמלה)"
+                value={fmtMoney(f.mode === "payment" ? paymentN : res.monthly)}
               />
+              {feeN > 0 && (
+                <ResultRow
+                  label="עמלת הקמה"
+                  value={fmtMoney(feeN)}
+                  sub={
+                    feePlan.months > 0
+                      ? `פריסה ל-${fmtNum(feePlan.months)} תשלומים`
+                      : "תשלום חד-פעמי"
+                  }
+                />
+              )}
+              {feePlan.months > 0 && (
+                <ResultRow label="רכיב עמלה חודשי" value={fmtMoney(feePlan.monthly)} />
+              )}
+              <ResultRow label="תשלום ראשון בפועל" value={fmtMoney(feeApplied.firstPayment)} strong />
+              {feePlan.months > 1 && (
+                <ResultRow
+                  label="תשלום לאחר סיום פריסת העמלה"
+                  value={fmtMoney(feeApplied.paymentAfterFee)}
+                />
+              )}
               {f.mode === "payment" && (
                 <>
                   <ResultRow label="תשלומים מלאים" value={`${fmtNum(res.fullMonths)}`} />
@@ -249,7 +332,7 @@ export default function BalloonSpreadCalc({ settings }: { settings: Settings }) 
                 </>
               )}
               <ResultRow label="סך הריבית בפריסה" value={fmtMoney(res.totalInterest)} />
-              <ResultRow label="סך התשלום הכולל" value={fmtMoney(res.totalPaid)} strong />
+              <ResultRow label="סך התשלום הכולל" value={fmtMoney(totalWithFee)} strong />
               <ResultRow label="מועד סיום משוער" value={endDate} />
             </div>
 

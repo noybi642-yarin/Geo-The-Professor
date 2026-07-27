@@ -14,18 +14,44 @@ import {
 import { Modal, ToastContext } from "./shared";
 import LoanCalc from "./LoanCalc";
 import BalloonSpreadCalc from "./BalloonSpreadCalc";
+import IndexCalc from "./IndexCalc";
+import TracksInfo from "./TracksInfo";
 import { BalloonCalc, DownCalc, FinPctCalc, InterestCalc } from "./SimpleCalcs";
 
-type CalcId = "loan" | "interest" | "finpct" | "down" | "balloon" | "spread";
+type CalcId =
+  | "loan"
+  | "index"
+  | "spread"
+  | "tracks"
+  | "interest"
+  | "finpct"
+  | "down"
+  | "balloon";
 
-const CALCS: { id: CalcId; icon: string; title: string; desc: string }[] = [
-  { id: "loan", icon: "🚗", title: "החזר חודשי", desc: "חישוב מלא של עסקת מימון — פריים, קבועה או צמודת מדד" },
-  { id: "spread", icon: "🎈", title: "פריסת בלון", desc: "חישוב המשך תשלומים על יתרת הבלון בסוף העסקה" },
+interface CalcMeta {
+  id: CalcId;
+  icon: string;
+  title: string;
+  desc: string;
+}
+
+/** ארבעת האזורים המרכזיים */
+const MAIN_CALCS: CalcMeta[] = [
+  { id: "loan", icon: "🚗", title: "בניית עסקת מימון", desc: "מסלול, ריבית, בלון ועמלת הקמה — עם לוח סילוקין" },
+  { id: "index", icon: "📊", title: "עדכון תשלום לפי מדד", desc: "עדכון החזר לפי ערך מדד, אחוזים או נקודות" },
+  { id: "spread", icon: "🎈", title: "פריסת יתרת בלון", desc: "המשך תשלומים על יתרת הבלון בסוף העסקה" },
+  { id: "tracks", icon: "📚", title: "הכרת המסלולים", desc: "Drive, Extra Lease, Fix ו-Express — טווחים ותנאים" },
+];
+
+/** מחשבונים מהירים משלימים */
+const QUICK_CALCS: CalcMeta[] = [
   { id: "interest", icon: "💰", title: "מחשבון ריבית", desc: "כמה ריבית וכמה קרן ישולמו בהלוואה" },
   { id: "finpct", icon: "📈", title: "אחוז מימון", desc: "אחוז המימון לפי מחיר הרכב והמקדמה" },
   { id: "down", icon: "💵", title: "מחשבון מקדמה", desc: "כמה מקדמה צריך לפי אחוז המימון" },
   { id: "balloon", icon: "📊", title: "מחשבון בלון", desc: "סכום הבלון וההלוואה לאחר המקדמה" },
 ];
+
+const CALCS: CalcMeta[] = [...MAIN_CALCS, ...QUICK_CALCS];
 
 const SETTINGS_KEY = "sn.settings.v1";
 
@@ -99,35 +125,56 @@ export default function CalcApp() {
 
         <main className="sn-container">
           {!active && (
-            <div className="sn-grid" key="home">
-              {CALCS.map((c, idx) => (
+            <div key="home">
+              <div className="sn-grid main-grid">
+                {MAIN_CALCS.map((c, idx) => (
+                  <button
+                    type="button"
+                    key={c.id}
+                    className="sn-tile"
+                    style={{ animationDelay: `${idx * 45}ms` }}
+                    onClick={() => setScreen(c.id)}
+                  >
+                    <span className="tile-icon">{c.icon}</span>
+                    <span className="tile-title">{c.title}</span>
+                    <span className="tile-desc">{c.desc}</span>
+                  </button>
+                ))}
+              </div>
+
+              <h2 className="section-head">מחשבונים מהירים</h2>
+              <div className="sn-grid">
+                {QUICK_CALCS.map((c, idx) => (
+                  <button
+                    type="button"
+                    key={c.id}
+                    className="sn-tile"
+                    style={{ animationDelay: `${(MAIN_CALCS.length + idx) * 45}ms` }}
+                    onClick={() => setScreen(c.id)}
+                  >
+                    <span className="tile-icon">{c.icon}</span>
+                    <span className="tile-title">{c.title}</span>
+                    <span className="tile-desc">{c.desc}</span>
+                  </button>
+                ))}
                 <button
                   type="button"
-                  key={c.id}
-                  className="sn-tile"
-                  style={{ animationDelay: `${idx * 45}ms` }}
-                  onClick={() => setScreen(c.id)}
+                  className="sn-tile tile-settings"
+                  style={{ animationDelay: `${CALCS.length * 45}ms` }}
+                  onClick={() => setShowSettings(true)}
                 >
-                  <span className="tile-icon">{c.icon}</span>
-                  <span className="tile-title">{c.title}</span>
-                  <span className="tile-desc">{c.desc}</span>
+                  <span className="tile-icon">⚙️</span>
+                  <span className="tile-title">הגדרות</span>
+                  <span className="tile-desc">עמלת הקמה, ריבית, צבעים ואחוזי מימון</span>
                 </button>
-              ))}
-              <button
-                type="button"
-                className="sn-tile tile-settings"
-                style={{ animationDelay: `${CALCS.length * 45}ms` }}
-                onClick={() => setShowSettings(true)}
-              >
-                <span className="tile-icon">⚙️</span>
-                <span className="tile-title">הגדרות</span>
-                <span className="tile-desc">עמלת הקמה, ריבית, צבעים ואחוזי מימון</span>
-              </button>
+              </div>
             </div>
           )}
 
           {screen === "loan" && <LoanCalc settings={settings} />}
+          {screen === "index" && <IndexCalc />}
           {screen === "spread" && <BalloonSpreadCalc settings={settings} />}
+          {screen === "tracks" && <TracksInfo />}
           {screen === "interest" && <InterestCalc settings={settings} />}
           {screen === "finpct" && <FinPctCalc />}
           {screen === "down" && <DownCalc settings={settings} />}
