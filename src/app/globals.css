@@ -906,6 +906,137 @@ input {
   color: var(--text-2);
 }
 
+/* ─── מצבי מחשבון הסבסודים ──────────────────────────────────── */
+
+.mode-tabs {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+@media (min-width: 560px) {
+  .mode-tabs {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.mode-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 60px;
+  padding: 14px 12px;
+  border-radius: 15px;
+  border: 2px solid var(--input-border);
+  background: #fff;
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--text-2);
+  line-height: 1.3;
+  transition: all 0.16s ease;
+}
+
+.mode-tab:active {
+  transform: scale(0.97);
+}
+
+.mode-icon {
+  font-size: 19px;
+  flex-shrink: 0;
+}
+
+.mode-tab.mode-cost.on {
+  background: #059669;
+  border-color: #059669;
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(5, 150, 105, 0.28);
+}
+
+.mode-tab.mode-budget.on {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.28);
+}
+
+.mode-tab.mode-target.on {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(13, 42, 94, 0.28);
+}
+
+.mode-tab:not(.on):hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.mode-desc {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-2);
+  text-align: center;
+}
+
+/* ─── Tooltip הסבר לשדה ─────────────────────────────────────── */
+
+.tip-wrap {
+  position: relative;
+  display: inline-flex;
+  margin-inline-start: 6px;
+  vertical-align: middle;
+}
+
+.tip-btn {
+  width: 17px;
+  height: 17px;
+  border-radius: 999px;
+  background: #dde5f2;
+  color: #5a6b8a;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.tip-btn:hover,
+.tip-btn.on {
+  background: var(--accent);
+  color: #fff;
+}
+
+.tip-bubble {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 8px);
+  inset-inline-start: -8px;
+  width: max-content;
+  max-width: 250px;
+  background: var(--accent-dark);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.55;
+  padding: 9px 13px;
+  border-radius: 11px;
+  box-shadow: 0 8px 22px rgba(10, 22, 46, 0.28);
+  animation: pop-in 0.15s ease both;
+  pointer-events: none;
+}
+
+.tip-bubble::before {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  inset-inline-start: 12px;
+  border: 6px solid transparent;
+  border-bottom-color: var(--accent-dark);
+}
+
 /* ─── התראות טווח מסלול ─────────────────────────────────────── */
 
 .alerts {

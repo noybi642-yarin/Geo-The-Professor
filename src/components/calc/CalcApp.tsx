@@ -15,11 +15,13 @@ import { Modal, ToastContext } from "./shared";
 import LoanCalc from "./LoanCalc";
 import BalloonSpreadCalc from "./BalloonSpreadCalc";
 import IndexCalc from "./IndexCalc";
+import SubsidyCalc from "./SubsidyCalc";
 import TracksInfo from "./TracksInfo";
 import { BalloonCalc, DownCalc, FinPctCalc, InterestCalc } from "./SimpleCalcs";
 
 type CalcId =
   | "loan"
+  | "subsidy"
   | "index"
   | "spread"
   | "tracks"
@@ -38,6 +40,7 @@ interface CalcMeta {
 /** ארבעת האזורים המרכזיים */
 const MAIN_CALCS: CalcMeta[] = [
   { id: "loan", icon: "🚗", title: "בניית עסקת מימון", desc: "מסלול, ריבית, בלון ועמלת הקמה — עם לוח סילוקין" },
+  { id: "subsidy", icon: "🤑", title: "מחשבון סבסודים", desc: "כמה עולה לסבסד ריבית, ומה מקבלים מתקציב נתון" },
   { id: "index", icon: "📊", title: "עדכון תשלום לפי מדד", desc: "עדכון החזר לפי ערך מדד, אחוזים או נקודות" },
   { id: "spread", icon: "🎈", title: "פריסת יתרת בלון", desc: "המשך תשלומים על יתרת הבלון בסוף העסקה" },
   { id: "tracks", icon: "📚", title: "הכרת המסלולים", desc: "Drive, Extra Lease, Fix ו-Express — טווחים ותנאים" },
@@ -172,6 +175,7 @@ export default function CalcApp() {
           )}
 
           {screen === "loan" && <LoanCalc settings={settings} />}
+          {screen === "subsidy" && <SubsidyCalc settings={settings} />}
           {screen === "index" && <IndexCalc />}
           {screen === "spread" && <BalloonSpreadCalc settings={settings} />}
           {screen === "tracks" && <TracksInfo />}
