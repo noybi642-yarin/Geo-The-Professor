@@ -45,6 +45,36 @@ export function usePersistentState<T extends object>(
   return [state, setState];
 }
 
+// ─── Tooltip הסבר לשדה ─────────────────────────────────────────
+
+export function Tip({ text }: { text: string }) {
+  // ריחוף ונעיצה נשמרים בנפרד: אחרת ריחוף פותח ואז הלחיצה סוגרת מיד
+  const [pinned, setPinned] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const open = pinned || hovered;
+  return (
+    <span className="tip-wrap">
+      <button
+        type="button"
+        className={`tip-btn${open ? " on" : ""}`}
+        aria-label="הסבר על השדה"
+        aria-expanded={open}
+        onClick={() => setPinned((v) => !v)}
+        onBlur={() => setPinned(false)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
+        ?
+      </button>
+      {open && (
+        <span className="tip-bubble" role="tooltip">
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
+
 // ─── שדה קלט מספרי ─────────────────────────────────────────────
 
 export type Unit = "amount" | "percent";
@@ -63,6 +93,7 @@ export function NumField({
   onChip,
   activeChip,
   allowNegative,
+  tip,
 }: {
   label: string;
   value: string;
@@ -77,11 +108,15 @@ export function NumField({
   onChip?: (v: number) => void;
   activeChip?: number;
   allowNegative?: boolean;
+  tip?: string;
 }) {
   return (
     <div className="field">
       <div className="field-head">
-        <label className="field-label">{label}</label>
+        <label className="field-label">
+          {label}
+          {tip && <Tip text={tip} />}
+        </label>
         {unit && onUnitChange && (
           <div className="unit-toggle" role="group" aria-label="יחידה">
             <button

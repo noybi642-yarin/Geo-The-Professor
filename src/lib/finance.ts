@@ -431,6 +431,216 @@ export function estimateEndDate(months: number, startISO?: string): string {
   return new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric" }).format(end);
 }
 
+// ─── מנוע TVM ופותר ריבית (Rate Solver) ────────────────────────
+// חישובי ערך זמן של כסף אמיתיים — ללא קירובים.
+// N = מספר חודשים, I = ריבית שנתית, PV = סכום המימון,
+// PMT = החזר חודשי, FV = יתרת סוף תקופה (Balloon).
+
+/** מקדם היוון אנונה: [1-(1+i)^-n] / i */
+export function annuityFactor(i: number, n: number): number {
+  if (n <= 0) return 0;
+  if (i === 0) return n;
+  return (1 - Math.pow(1 + i, -n)) / i;
+}
+
+/** ערך נוכחי של סדרת תשלומים קבועים + יתרת סוף תקופה */
+export function presentValue(pmt: number, i: number, n: number, fv = 0): number {
+  return pmt * annuityFactor(i, n) + fv * Math.pow(1 + i, -n);
+}
+
+/** המרת ריבית חודשית חזרה לריבית שנתית */
+export function annualFromMonthly(i: number, method: RateMethod = "nominal"): number {
+  return method === "effective" ? (Math.pow(1 + i, 12) - 1) * 100 : i * 12 * 100;
+}
+
+/**
+ * פותר ריבית חודשית מתוך PV, PMT, N ו-FV — Newton-Raphson
+ * עם חסם ביסקציה שמבטיח התכנסות בכל מקרה.
+ * מדויק עד 1e-12 בריבית החודשית (הרבה מתחת ל-0.01% שנתי).
+ */
+export function solveMonthlyRate(
+  pv: number,
+  pmt: number,
+  n: number,
+  fv = 0
+): { ok: boolean; rate: number; error?: string } {
+  if (!(pv > 0)) return { ok: false, rate: 0, error: "סכום המימון חייב להיות גדול מאפס" };
+  if (!(n > 0)) return { ok: false, rate: 0, error: "מספר החודשים חייב להיות גדול מאפס" };
+  if (!(pmt > 0)) return { ok: false, rate: 0, error: "ההחזר החודשי חייב להיות גדול מאפס" };
+
+  // f(i) = PMT·a(i,n) + FV·(1+i)^-n − PV ; פונקציה מונוטונית יורדת ב-i
+  const f = (i: number) => presentValue(pmt, i, n, fv) - pv;
+
+  // סבילות יחסית לגודל העסקה — שארית של אגורה על מיליון היא אפס לכל דבר
+  const tol = Math.max(1e-9, pv * 1e-13);
+
+  // ריבית 0% היא הגבול העליון של ה-PV
+  const f0 = f(0);
+  if (Math.abs(f0) <= tol) return { ok: true, rate: 0 };
+  if (f0 < 0)
+    return {
+      ok: false,
+      rate: 0,
+      error: "ההחזר החודשי נמוך מדי — אינו מסלק את המימון גם בריבית 0%",
+    };
+
+  // חיפוש חסם עליון שבו f מתהפך לשלילי (עד 100% חודשי = 1200% שנתי)
+  let hi = 0.01;
+  while (f(hi) > 0 && hi < 1) hi *= 2;
+  if (f(hi) > 0) return { ok: false, rate: 0, error: "לא נמצאה ריבית מתאימה לנתונים שהוזנו" };
+
+  let lo = 0;
+  let i = Math.min(0.005, hi / 2); // ניחוש פתיחה: 6% שנתי
+
+  for (let k = 0; k < 200; k++) {
+    const fi = f(i);
+    if (Math.abs(fi) <= tol) break;
+    if (fi > 0) lo = i;
+    else hi = i;
+    // הבראקט נסגר עד רמת דיוק המכונה — אין טעם להמשיך
+    if (hi - lo < 1e-15) {
+      i = (lo + hi) / 2;
+      break;
+    }
+
+    // נגזרת נומרית דו-צדדית ל-Newton, עם היצמדות לתחום החוקי
+    const h = Math.max(i * 1e-7, 1e-12);
+    const left = Math.max(i - h, 0);
+    const d = (f(i + h) - f(left)) / (i + h - left);
+
+    let next = d !== 0 ? i - fi / d : NaN;
+    // אם Newton יצא מהבראקט או נכשל — נסוגים לביסקציה
+    if (!Number.isFinite(next) || next <= lo || next >= hi) next = (lo + hi) / 2;
+    i = next;
+  }
+
+  return { ok: true, rate: i };
+}
+
+// ─── מחשבון סבסודים ────────────────────────────────────────────
+
+export interface SubsidyResult {
+  ok: boolean;
+  error?: string;
+  /** החזר חודשי בריבית העסקה */
+  dealPayment: number;
+  /** החזר חודשי בריבית שהלקוח מקבל */
+  customerPayment: number;
+  /** ההפרש החודשי */
+  monthlyDiff: number;
+  /** הסבסוד הנדרש — ערך נוכחי של ההפרשים, מהוון בריבית העסקה */
+  subsidy: number;
+  /** סך ההפרשים לאורך התקופה, ללא היוון */
+  nominalDiff: number;
+  dealRate: number;
+  customerRate: number;
+}
+
+/**
+ * מצב 1 / מצב 3 — כמה עולה לסוכנות לסבסד את הריבית.
+ *
+ * הסבסוד הוא הערך הנוכחי של ההפרשים החודשיים, מהוון בריבית העסקה.
+ * זהה מתמטית להפרש בין סכום המימון לבין הערך הנוכחי של תשלומי
+ * הלקוח לפי ריבית העסקה:
+ *   S = (PMT_deal − PMT_cust) · a(i_deal, n) = PV − PV(PMT_cust @ i_deal)
+ */
+export function subsidyCost(
+  loan: number,
+  dealRatePct: number,
+  customerRatePct: number,
+  months: number,
+  balloon = 0,
+  method: RateMethod = "nominal"
+): SubsidyResult {
+  const empty: SubsidyResult = {
+    ok: false,
+    dealPayment: 0,
+    customerPayment: 0,
+    monthlyDiff: 0,
+    subsidy: 0,
+    nominalDiff: 0,
+    dealRate: dealRatePct,
+    customerRate: customerRatePct,
+  };
+
+  if (!(loan > 0)) return { ...empty, error: "יש להזין סכום מימון" };
+  const n = Math.round(months);
+  if (!(n > 0)) return { ...empty, error: "מספר החודשים חייב להיות גדול מאפס" };
+  if (dealRatePct < 0 || customerRatePct < 0)
+    return { ...empty, error: "לא ניתן להזין ריבית שלילית" };
+  if (balloon < 0 || balloon > loan)
+    return { ...empty, error: "סכום הבלון לא יכול להיות גדול מסכום המימון" };
+
+  const iDeal = monthlyRate(dealRatePct, method);
+  const iCust = monthlyRate(customerRatePct, method);
+  const dealPayment = spitzerPayment(loan, iDeal, n, balloon);
+  const customerPayment = spitzerPayment(loan, iCust, n, balloon);
+  const monthlyDiff = dealPayment - customerPayment;
+
+  return {
+    ok: true,
+    dealPayment,
+    customerPayment,
+    monthlyDiff,
+    subsidy: monthlyDiff * annuityFactor(iDeal, n),
+    nominalDiff: monthlyDiff * n,
+    dealRate: dealRatePct,
+    customerRate: customerRatePct,
+  };
+}
+
+export interface SubsidyBudgetResult extends SubsidyResult {
+  /** הריבית השנתית שהלקוח יקבל אחרי הסבסוד */
+  newRate: number;
+}
+
+/**
+ * מצב 2 — יש תקציב סבסוד, מהי הריבית שהלקוח יקבל.
+ *
+ * הסוכנות מזרימה S, ולכן שווי ההלוואה עבור המממן הוא PV − S.
+ * מכאן נגזר תשלום הלקוח, וממנו נפתרת הריבית באופן איטרטיבי.
+ */
+export function subsidyToRate(
+  loan: number,
+  dealRatePct: number,
+  subsidy: number,
+  months: number,
+  balloon = 0,
+  method: RateMethod = "nominal"
+): SubsidyBudgetResult {
+  const base = subsidyCost(loan, dealRatePct, dealRatePct, months, balloon, method);
+  const empty: SubsidyBudgetResult = { ...base, ok: false, newRate: 0, subsidy: 0 };
+  if (!base.ok) return { ...empty, error: base.error };
+
+  if (subsidy < 0) return { ...empty, error: "סכום הסבסוד לא יכול להיות שלילי" };
+  if (subsidy >= loan) return { ...empty, error: "סכום הסבסוד גבוה מסכום המימון" };
+
+  const n = Math.round(months);
+  const iDeal = monthlyRate(dealRatePct, method);
+  const a = annuityFactor(iDeal, n);
+  const v = Math.pow(1 + iDeal, -n);
+
+  // תשלום הלקוח הנגזר מהערך הנוכחי המופחת
+  const customerPayment = (loan - subsidy - balloon * v) / a;
+  if (!(customerPayment > 0))
+    return { ...empty, error: "הסבסוד גבוה מדי ביחס לתנאי העסקה" };
+
+  // התשלום המינימלי האפשרי הוא בריבית 0%
+  const zeroRatePayment = (loan - balloon) / n;
+  if (customerPayment < zeroRatePayment - 1e-9)
+    return {
+      ...empty,
+      error: "הסבסוד גבוה מהריבית הכוללת בעסקה — הריבית ללקוח לא יכולה לרדת מתחת ל-0%",
+    };
+
+  const solved = solveMonthlyRate(loan, customerPayment, n, balloon);
+  if (!solved.ok) return { ...empty, error: solved.error };
+
+  const newRate = annualFromMonthly(solved.rate, method);
+  const full = subsidyCost(loan, dealRatePct, newRate, months, balloon, method);
+  return { ...full, newRate, subsidy, ok: true };
+}
+
 // ─── עמלת הקמה ופריסתה ─────────────────────────────────────────
 
 export type FeeMode = "upfront" | "spread" | "full-term";
