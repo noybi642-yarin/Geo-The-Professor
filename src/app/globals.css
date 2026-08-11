@@ -1066,6 +1066,79 @@ input {
   color: #a02020;
 }
 
+/* ─── כרטיס נתונים עדכניים ──────────────────────────────────── */
+
+.live-card {
+  margin-bottom: 18px;
+  animation: fade-up 0.4s ease both;
+}
+
+.live-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.live-stale {
+  margin-bottom: 14px;
+}
+
+.live-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+@media (max-width: 460px) {
+  .live-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.live-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: var(--input-bg);
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  padding: 13px 14px;
+}
+
+.live-item.live-prime {
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+
+.live-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.live-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--accent-dark);
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: plaintext;
+}
+
+.live-sub {
+  font-size: 11.5px;
+  color: var(--text-3);
+  min-height: 14px;
+}
+
+.live-foot {
+  margin-top: 12px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
 /* ─── כותרת אזור במסך הבית ──────────────────────────────────── */
 
 .section-head {
