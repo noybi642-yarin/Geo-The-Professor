@@ -15,6 +15,7 @@ import { Modal, ToastContext } from "./shared";
 import LoanCalc from "./LoanCalc";
 import BalloonSpreadCalc from "./BalloonSpreadCalc";
 import IndexCalc from "./IndexCalc";
+import LiveDataCard from "./LiveDataCard";
 import SubsidyCalc from "./SubsidyCalc";
 import TracksInfo from "./TracksInfo";
 import { BalloonCalc, DownCalc, FinPctCalc, InterestCalc } from "./SimpleCalcs";
@@ -129,6 +130,8 @@ export default function CalcApp() {
         <main className="sn-container">
           {!active && (
             <div key="home">
+              <LiveDataCard />
+
               <div className="sn-grid main-grid">
                 {MAIN_CALCS.map((c, idx) => (
                   <button
