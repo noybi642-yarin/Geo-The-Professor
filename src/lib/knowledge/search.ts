@@ -83,8 +83,16 @@ export function searchSource(source: KnowledgeSource, query: string): SearchHit[
     const title = normalize(item.title);
     const keywords = item.keywords.map(normalize);
     const summary = item.summary.map(normalize);
-    const quotes = item.quotes.map((x) => normalize(x.text + " " + x.ref));
+    const quotes = (item.quotes ?? []).map((x) => normalize(x.text + " " + x.ref));
     const note = item.note ? normalize(item.note) : "";
+    // דרישות מובנות (מסמכים לפי סוג לקוח) נסרקות ברמת מילות המפתח
+    const groups = (item.groups ?? []).flatMap((g) => [
+      normalize(g.title),
+      g.note ? normalize(g.note) : "",
+      g.footnote ? normalize(g.footnote) : "",
+      ...(g.items ?? []).map(normalize),
+      ...(g.options ?? []).flatMap((o) => [normalize(o.label), ...o.items.map(normalize)]),
+    ]);
 
     let total = 0;
     let allWordsMatched = true;
@@ -97,6 +105,7 @@ export function searchSource(source: KnowledgeSource, query: string): SearchHit[
         if (title.includes(v)) best = Math.max(best, 100);
         if (keywords.some((k) => k.includes(v))) best = Math.max(best, 60);
         if (summary.some((s) => s.includes(v))) best = Math.max(best, 40);
+        if (groups.some((g) => g.includes(v))) best = Math.max(best, 50);
         if (note.includes(v)) best = Math.max(best, 30);
         if (quotes.some((t) => t.includes(v))) best = Math.max(best, 20);
       }
@@ -128,4 +137,23 @@ export function searchSource(source: KnowledgeSource, query: string): SearchHit[
     return hits.filter((h) => h.score >= cutoff);
   }
   return hits;
+}
+
+export interface SourceHits {
+  source: KnowledgeSource;
+  hits: SearchHit[];
+}
+
+/**
+ * חיפוש בכל מקורות הידע יחד.
+ * מחזיר רק מקורות שיש בהם תוצאות, ממוין לפי ההתאמה הטובה ביותר
+ * בכל מקור. שאילתה ריקה מחזירה רשימה ריקה — במצב הזה מוצגים
+ * כרטיסי המקורות במקום תוצאות חיפוש.
+ */
+export function searchAll(sources: KnowledgeSource[], query: string): SourceHits[] {
+  if (!normalize(query)) return [];
+  return sources
+    .map((source) => ({ source, hits: searchSource(source, query) }))
+    .filter((r) => r.hits.length > 0)
+    .sort((a, b) => b.hits[0].score - a.hits[0].score);
 }
