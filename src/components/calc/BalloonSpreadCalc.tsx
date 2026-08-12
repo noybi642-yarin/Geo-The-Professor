@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   applyFeeToLoan,
   balloonSpreadByMonths,
+  FEE_SPREAD_RATE,
   balloonSpreadByPayment,
   copyText,
   estimateEndDate,
@@ -52,7 +53,7 @@ const INITIAL: SpreadForm = {
   payment: "",
   prevPayment: "",
   feeMode: "upfront",
-  feeSpreadCount: "12",
+  feeSpreadCount: "",
 };
 
 export default function BalloonSpreadCalc({ settings }: { settings: Settings }) {
@@ -84,7 +85,8 @@ export default function BalloonSpreadCalc({ settings }: { settings: Settings }) 
     [feeN, f.feeMode, f.feeSpreadCount, res]
   );
   const feeApplied = res.ok ? applyFeeToLoan(res, feePlan) : null;
-  const totalWithFee = res.ok ? round2(res.totalPaid + feeN) : 0;
+  // כולל את ריבית פריסת העמלה, לא רק את קרן העמלה
+  const totalWithFee = res.ok ? round2(res.totalPaid + feePlan.totalPaid) : 0;
 
   const endDate = res.ok ? estimateEndDate(res.months, f.startDate || undefined) : "—";
 
@@ -219,7 +221,7 @@ export default function BalloonSpreadCalc({ settings }: { settings: Settings }) 
             <div className="field-head">
               <label className="field-label">אופן תשלום העמלה</label>
             </div>
-            <div className="seg seg-3">
+            <div className="seg">
               <button
                 type="button"
                 className={f.feeMode === "upfront" ? "on" : ""}
@@ -232,17 +234,14 @@ export default function BalloonSpreadCalc({ settings }: { settings: Settings }) 
                 className={f.feeMode === "spread" ? "on" : ""}
                 onClick={() => set({ feeMode: "spread" })}
               >
-                פריסה למספר תשלומים
-              </button>
-              <button
-                type="button"
-                className={f.feeMode === "full-term" ? "on" : ""}
-                onClick={() => set({ feeMode: "full-term" })}
-              >
-                פריסה לכל התקופה
+                פריסה לתשלומים
               </button>
             </div>
-            <div className="field-hint">הפריסה היא ללא ריבית</div>
+            <div className="field-hint">
+              {f.feeMode === "spread"
+                ? `הפריסה נושאת ריבית שנתית נומינלית של ${fmtPct(FEE_SPREAD_RATE)}`
+                : "העמלה תיגבה במלואה בתשלום הראשון"}
+            </div>
           </div>
           {f.feeMode === "spread" && (
             <NumField

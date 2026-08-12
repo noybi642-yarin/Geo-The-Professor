@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   applyFeeToLoan,
   cpiSpitzerLoan,
+  FEE_SPREAD_RATE,
   copyText,
   equalPrincipalLoan,
   fmtMoney,
@@ -84,7 +85,7 @@ const INITIAL: LoanForm = {
   balloonUnit: "percent",
   feeOverride: "",
   feeMode: "upfront",
-  feeSpreadCount: "12",
+  feeSpreadCount: "",
 };
 
 const CPI_DISCLAIMER =
@@ -278,7 +279,8 @@ export default function LoanCalc({ settings }: { settings: Settings }) {
 
   const feeApplied = ok ? applyFeeToLoan(res, feePlan) : null;
   const finPctN = priceN > 0 && loanN > 0 ? (loanN / priceN) * 100 : NaN;
-  const totalWithFee = ok ? round2(res.totalPaid + feeN) : 0;
+  // סך התשלומים כולל את ריבית פריסת העמלה, לא רק את קרן העמלה
+  const totalWithFee = ok ? round2(res.totalPaid + feePlan.totalPaid) : 0;
   const dealTotal = ok ? round2(totalWithFee + (overrideN > 0 ? 0 : downN)) : 0;
   const cpiTotalWithFee = cpiRes?.ok ? round2(cpiRes.totalPaid + feeN) : 0;
   const cpiDealTotal = cpiRes?.ok ? round2(cpiTotalWithFee + (overrideN > 0 ? 0 : downN)) : 0;
@@ -314,11 +316,18 @@ export default function LoanCalc({ settings }: { settings: Settings }) {
       lines.push(`💳 החזר חודשי: ${fmtMoney(res.monthly)}`);
       lines.push(`💰 תשלום ראשון: ${fmtMoney(feeApplied.firstPayment)}`);
       if (feePlan.months > 0) {
-        lines.push(`💰 תשלום בזמן פריסת העמלה: ${fmtMoney(feeApplied.paymentDuringFee)}`);
+        lines.push(`🧾 תוספת עמלת הקמה: ${fmtMoney(feePlan.monthly)}`);
+        lines.push(`💰 סה״כ החזר חודשי: ${fmtMoney(feeApplied.paymentDuringFee)}`);
         lines.push(`💰 תשלום לאחר סיום פריסת העמלה: ${fmtMoney(feeApplied.paymentAfterFee)}`);
       }
     }
-    if (feeN > 0) lines.push(`🧾 עמלת הקמה: ${fmtMoney(feeN)}`);
+    if (feeN > 0)
+      lines.push(
+        `🧾 עמלת הקמה: ${fmtMoney(feeN)}` +
+          (feePlan.months > 0
+            ? ` (${fmtNum(feePlan.months)} תשלומים בריבית ${fmtPct(feePlan.rate)})`
+            : " (חד-פעמי)")
+      );
     if (res.balloon > 0) lines.push(`🎈 בלון בסוף התקופה: ${fmtMoney(res.balloon)}`);
     lines.push(`📊 סך כל התשלומים: ${fmtMoney(totalWithFee)}`);
     if (product === "cpi" && cpiRes?.ok && cpiN !== 0) {
@@ -553,30 +562,27 @@ export default function LoanCalc({ settings }: { settings: Settings }) {
             <div className="field-head">
               <label className="field-label">אופן תשלום העמלה</label>
             </div>
-            <div className="seg seg-3">
+            <div className="seg">
               <button
                 type="button"
                 className={f.feeMode === "upfront" ? "on" : ""}
                 onClick={() => set({ feeMode: "upfront" })}
               >
-                חד-פעמי בתחילת העסקה
+                תשלום חד-פעמי
               </button>
               <button
                 type="button"
                 className={f.feeMode === "spread" ? "on" : ""}
                 onClick={() => set({ feeMode: "spread" })}
               >
-                פריסה למספר תשלומים
-              </button>
-              <button
-                type="button"
-                className={f.feeMode === "full-term" ? "on" : ""}
-                onClick={() => set({ feeMode: "full-term" })}
-              >
-                פריסה לכל תקופת המימון
+                פריסה לתשלומים
               </button>
             </div>
-            <div className="field-hint">הפריסה היא ללא ריבית</div>
+            <div className="field-hint">
+              {f.feeMode === "spread"
+                ? `הפריסה נושאת ריבית שנתית נומינלית של ${fmtPct(FEE_SPREAD_RATE)}`
+                : "העמלה תיגבה במלואה בתשלום הראשון"}
+            </div>
           </div>
           {f.feeMode === "spread" && (
             <NumField
@@ -584,9 +590,11 @@ export default function LoanCalc({ settings }: { settings: Settings }) {
               value={f.feeSpreadCount}
               onChange={(v) => set({ feeSpreadCount: v })}
               suffix="תש׳"
-              chips={[3, 6, 12, 24]}
+              placeholder={monthsN > 0 ? String(Math.round(monthsN)) : "0"}
+              chips={[12, 24, 36, 48, 60]}
               activeChip={parseNum(f.feeSpreadCount)}
               onChip={(c) => set({ feeSpreadCount: String(c) })}
+              hint="ריק = כמספר חודשי עסקת המימון"
             />
           )}
         </div>
@@ -622,6 +630,23 @@ export default function LoanCalc({ settings }: { settings: Settings }) {
               />
             )}
 
+            {feePlan.months > 0 && (
+              <div className="fee-breakdown">
+                <div className="fee-line">
+                  <span>החזר מימון</span>
+                  <b>{fmtMoney(feeApplied.paymentAfterFee)}</b>
+                </div>
+                <div className="fee-line fee-plus">
+                  <span>תוספת עמלת הקמה</span>
+                  <b>+ {fmtMoney(feePlan.monthly)}</b>
+                </div>
+                <div className="fee-line fee-total">
+                  <span>סה״כ החזר חודשי</span>
+                  <b>{fmtMoney(feeApplied.paymentDuringFee)}</b>
+                </div>
+              </div>
+            )}
+
             <div className="result-list">
               <ResultRow
                 label="סכום המימון"
@@ -643,12 +668,16 @@ export default function LoanCalc({ settings }: { settings: Settings }) {
                 value={fmtMoney(feeN)}
                 sub={
                   feePlan.months > 0
-                    ? `פריסה ל-${fmtNum(feePlan.months)} תשלומים`
+                    ? `${fmtNum(feePlan.months)} תשלומים · ריבית ${fmtPct(feePlan.rate)}`
                     : "תשלום חד-פעמי"
                 }
               />
               {feePlan.months > 0 && (
-                <ResultRow label="רכיב עמלה חודשי" value={fmtMoney(feePlan.monthly)} />
+                <ResultRow
+                  label="תשלום חודשי בגין עמלת ההקמה"
+                  value={fmtMoney(feePlan.monthly)}
+                  sub={`ריבית פריסה: ${fmtMoney(feePlan.totalInterest)}`}
+                />
               )}
               <ResultRow
                 label="תשלום ראשון בפועל"
@@ -656,16 +685,10 @@ export default function LoanCalc({ settings }: { settings: Settings }) {
                 strong
               />
               {feePlan.months > 1 && (
-                <>
-                  <ResultRow
-                    label="תשלום בזמן פריסת העמלה"
-                    value={fmtMoney(feeApplied.paymentDuringFee)}
-                  />
-                  <ResultRow
-                    label="תשלום לאחר סיום פריסת העמלה"
-                    value={fmtMoney(feeApplied.paymentAfterFee)}
-                  />
-                </>
+                <ResultRow
+                  label="תשלום לאחר סיום פריסת העמלה"
+                  value={fmtMoney(feeApplied.paymentAfterFee)}
+                />
               )}
 
               {res.balloon > 0 && (

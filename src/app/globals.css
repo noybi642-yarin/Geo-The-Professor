@@ -1616,6 +1616,55 @@ input {
   border-radius: 999px;
 }
 
+/* ─── פירוט ההחזר החודשי עם עמלת ההקמה ──────────────────────── */
+
+.fee-breakdown {
+  background: var(--input-bg);
+  border: 1.5px solid var(--line);
+  border-radius: 15px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+
+.fee-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 7px 0;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.fee-line b {
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fee-line.fee-plus b {
+  color: var(--accent);
+}
+
+.fee-line.fee-total {
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 2px solid var(--line);
+}
+
+.fee-line.fee-total span {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.fee-line.fee-total b {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--accent-dark);
+}
+
 /* ─── הערת מידע (מדד וכו') ──────────────────────────────────── */
 
 .note {
