@@ -2,10 +2,11 @@
 // להוספת מקור ידע חדש: צור קובץ נתונים בתיקייה זו והוסף אותו
 // למערך שלהלן. הממשק נבנה אוטומטית — אין צורך לגעת ברכיבים.
 
+import { clientDocuments } from "./clientDocuments.ts";
 import { financeContract } from "./financeContract.ts";
 import type { KnowledgeSource } from "./types.ts";
 
-export const KNOWLEDGE_SOURCES: KnowledgeSource[] = [financeContract];
+export const KNOWLEDGE_SOURCES: KnowledgeSource[] = [financeContract, clientDocuments];
 
 export function getSource(id: string): KnowledgeSource | undefined {
   return KNOWLEDGE_SOURCES.find((s) => s.id === id);

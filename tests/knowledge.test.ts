@@ -23,8 +23,8 @@ test("מבנה — לכל פריט מזהה ייחודי, כותרת, תקציר
     seen.add(item.id);
     assert.ok(item.title.length > 0, `${item.id}: חסרה כותרת`);
     assert.ok(item.summary.length > 0, `${item.id}: תקציר ריק`);
-    assert.ok(item.quotes.length > 0, `${item.id}: אין ציטוט מקור`);
-    for (const q of item.quotes) {
+    assert.ok((item.quotes?.length ?? 0) > 0, `${item.id}: אין ציטוט מקור`);
+    for (const q of item.quotes ?? []) {
       assert.ok(q.ref.length > 0, `${item.id}: ציטוט ללא הפניה`);
       assert.ok(q.text.length > 0, `${item.id}: ציטוט ריק`);
       assert.ok(["contract", "training"].includes(q.origin), `${item.id}: מקור לא מוכר`);
@@ -63,7 +63,7 @@ test("פרטיות — סכומים ספציפיים לעסקה מסומנים �
   // כל ציטוט שמכיל סכום מהעסקה שבמסמך חייב לשאת סימון
   const dealSpecific = ["5.5%", "890 ש״ח", "69,450", "9.5%", "9.92%", "6.07%", "15%"];
   for (const item of financeContract.items) {
-    for (const q of item.quotes) {
+    for (const q of item.quotes ?? []) {
       const hasDealNumber = dealSpecific.some((d) => q.text.includes(d));
       if (!hasDealNumber) continue;
       // מותר גם אם מדובר בשיעור שנקבע בדין ולא בעסקה
@@ -164,6 +164,6 @@ test("הערה — הסתירה בשיעור הריבית על פריסת העמ
   assert.ok(fee?.note, "חסרה הערה על הסתירה בין המסמכים");
   assert.ok(fee!.note!.includes("9.5%") && fee!.note!.includes("7%"));
   // שני המקורות מצוטטים
-  const origins = new Set(fee!.quotes.map((q) => q.origin));
+  const origins = new Set((fee!.quotes ?? []).map((q) => q.origin));
   assert.ok(origins.has("contract") && origins.has("training"));
 });
