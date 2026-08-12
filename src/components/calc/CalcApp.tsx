@@ -15,6 +15,7 @@ import { Modal, ToastContext } from "./shared";
 import LoanCalc from "./LoanCalc";
 import BalloonSpreadCalc from "./BalloonSpreadCalc";
 import IndexCalc from "./IndexCalc";
+import KnowledgeCenter from "./KnowledgeCenter";
 import LiveDataCard from "./LiveDataCard";
 import SubsidyCalc from "./SubsidyCalc";
 import TracksInfo from "./TracksInfo";
@@ -26,6 +27,7 @@ type CalcId =
   | "index"
   | "spread"
   | "tracks"
+  | "knowledge"
   | "interest"
   | "finpct"
   | "down"
@@ -44,7 +46,8 @@ const MAIN_CALCS: CalcMeta[] = [
   { id: "subsidy", icon: "🤑", title: "מחשבון סבסודים", desc: "כמה עולה לסבסד ריבית, ומה מקבלים מתקציב נתון" },
   { id: "index", icon: "📊", title: "עדכון תשלום לפי מדד", desc: "עדכון החזר לפי ערך מדד, אחוזים או נקודות" },
   { id: "spread", icon: "🎈", title: "פריסת יתרת בלון", desc: "המשך תשלומים על יתרת הבלון בסוף העסקה" },
-  { id: "tracks", icon: "📚", title: "הכרת המסלולים", desc: "Drive, Extra Lease, Fix ו-Express — טווחים ותנאים" },
+  { id: "tracks", icon: "🗂️", title: "הכרת המסלולים", desc: "Drive, Extra Lease, Fix ו-Express — טווחים ותנאים" },
+  { id: "knowledge", icon: "📚", title: "מרכז הידע", desc: "ספריית ידע מקצועית — מתחילה מחוזה המימון" },
 ];
 
 /** מחשבונים מהירים משלימים */
@@ -182,6 +185,7 @@ export default function CalcApp() {
           {screen === "index" && <IndexCalc />}
           {screen === "spread" && <BalloonSpreadCalc settings={settings} />}
           {screen === "tracks" && <TracksInfo />}
+          {screen === "knowledge" && <KnowledgeCenter />}
           {screen === "interest" && <InterestCalc settings={settings} />}
           {screen === "finpct" && <FinPctCalc />}
           {screen === "down" && <DownCalc settings={settings} />}
