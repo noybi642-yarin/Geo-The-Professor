@@ -50,32 +50,35 @@ test("עמלה חד-פעמית — נוספת במלואה לתשלום הראש
   close(applied.paymentAfterFee, loan.monthly, 0.001);
 });
 
-test("עמלה בפריסה — תוספת חודשית = עמלה/מספר תשלומים, אגורות בתשלום האחרון", () => {
-  // 1,550 / 12 = 129.1666… → 129.17 לחודש, והאחרון סוגר את ההפרש
+test("עמלה בפריסה — PMT בריבית 9.5%, והתוספת נפרדת מהחזר המימון", () => {
   const plan = planSetupFee(1550, "spread", 12, 60);
   assert.equal(plan.months, 12);
-  close(plan.monthly, 129.17, 1e-9);
-  close(plan.lastMonthly, round2(1550 - 129.17 * 11), 1e-9);
-  // סך כל תשלומי העמלה שווה בדיוק לעמלה
-  close(plan.monthly * 11 + plan.lastMonthly, 1550, 1e-9);
+  assert.equal(plan.rate, 9.5);
+  // אימות מול הנוסחה
+  const i = 0.095 / 12;
+  close(plan.monthly, round2((1550 * i) / (1 - Math.pow(1 + i, -12))), 1e-9);
+  // הפריסה נושאת ריבית ולכן סך התשלומים גדול מהעמלה
+  assert.ok(plan.totalPaid > 1550);
+  close(plan.totalPaid, 1550 + plan.totalInterest, 0.001);
 
   const loan = spitzerLoan(120000, 8.9, 60, 0, 0);
   const applied = applyFeeToLoan(loan, plan);
-  close(applied.paymentDuringFee, loan.monthly + 129.17, 0.001);
+  close(applied.paymentDuringFee, loan.monthly + plan.monthly, 0.001);
   close(applied.paymentAfterFee, loan.monthly, 0.001);
   assert.ok(applied.paymentDuringFee > applied.paymentAfterFee);
 });
 
-test("עמלה בפריסה לכל התקופה — נפרסת על מספר חודשי המימון", () => {
-  const plan = planSetupFee(890, "full-term", 0, 36);
+test("עמלה בפריסה — ברירת המחדל היא כל תקופת המימון", () => {
+  // spreadCount ריק → נגזר ממספר חודשי העסקה
+  const plan = planSetupFee(890, "spread", 0, 36);
   assert.equal(plan.months, 36);
-  close(plan.monthly, round2(890 / 36), 1e-9);
-  close(plan.monthly * 35 + plan.lastMonthly, 890, 1e-9);
+  close(plan.monthly, 28.51, 0.005, "הדוגמה שבחוזה");
 });
 
-test("עמלה בפריסה — לא ניתן לפרוס ליותר חודשים מתקופת המימון", () => {
-  const plan = planSetupFee(1550, "spread", 120, 48);
-  assert.equal(plan.months, 48);
+test("עמלה בפריסה — ניתן לקבוע ידנית מספר תשלומים שונה מהתקופה", () => {
+  assert.equal(planSetupFee(1550, "spread", 24, 48).months, 24);
+  // פריסה ארוכה מתקופת המימון מותרת כשנקבעת במפורש
+  assert.equal(planSetupFee(1550, "spread", 60, 48).months, 60);
 });
 
 test("עמלת הקמה בקרן שווה — מחוברת לתשלום הראשון היורד", () => {

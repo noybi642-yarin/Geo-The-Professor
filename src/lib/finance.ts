@@ -643,31 +643,54 @@ export function subsidyToRate(
 
 // ─── עמלת הקמה ופריסתה ─────────────────────────────────────────
 
-export type FeeMode = "upfront" | "spread" | "full-term";
+/**
+ * הריבית השנתית הנומינלית על פריסת עמלת ההקמה, לפי חוזה המימון.
+ * שימו לב: 9.92% המופיע בחוזה הוא הריבית המתואמת (המציגה ריבית
+ * דריבית) ואינו הריבית שבה מחושב התשלום — החישוב נעשה ב-9.5%.
+ */
+export const FEE_SPREAD_RATE = 9.5;
+
+export type FeeMode = "upfront" | "spread";
 
 export interface FeePlan {
   fee: number;
   mode: FeeMode;
-  /** מספר החודשים שעליהם נפרסת העמלה (0 = תשלום חד-פעמי) */
+  /** מספר תשלומי הפריסה (0 = תשלום חד-פעמי) */
   months: number;
-  /** התוספת החודשית הקבועה (מעוגלת לאגורות) */
+  /** הריבית השנתית הנומינלית על הפריסה (0 בתשלום חד-פעמי) */
+  rate: number;
+  /** התשלום החודשי בגין העמלה — PMT, מעוגל לאגורות בתצוגה בלבד */
   monthly: number;
-  /** התוספת בחודש האחרון של הפריסה — סופגת את פערי האגורות */
+  /** התשלום האחרון — סופג את פערי האגורות של הפריסה */
   lastMonthly: number;
+  /** סך הריבית על הפריסה */
+  totalInterest: number;
+  /** סך כל תשלומי העמלה (קרן + ריבית) */
+  totalPaid: number;
   /** התוספת בתשלום הראשון (העמלה המלאה בתשלום חד-פעמי) */
   firstAddition: number;
 }
 
 /**
- * פריסת עמלת הקמה ללא ריבית:
- * תוספת חודשית = עמלת הקמה / מספר תשלומי הפריסה.
- * פערי אגורות מתוקנים בתשלום האחרון של העמלה.
+ * פריסת עמלת ההקמה.
+ *
+ * העמלה אינה מצורפת לקרן ההלוואה ואינה נושאת את ריבית העסקה. היא
+ * נפרסת כרכיב עצמאי לפי נוסחת PMT בריבית של 9.5% שנתי נומינלי:
+ *   i   = 9.5% / 12
+ *   PMT = fee · i / (1 - (1+i)^-n)
+ *
+ * החישוב מתבצע בדיוק מלא; העיגול לאגורות הוא של הסכום הנגבה בלבד,
+ * והתשלום האחרון סוגר את פער העיגול המצטבר.
+ *
+ * spreadCount ריק או אפס → ברירת המחדל היא מספר חודשי עסקת המימון.
  */
 export function planSetupFee(
   fee: number,
   mode: FeeMode,
   spreadCount: number,
-  loanMonths: number
+  loanMonths: number,
+  ratePct: number = FEE_SPREAD_RATE,
+  method: RateMethod = "nominal"
 ): FeePlan {
   const safeFee = fee > 0 ? fee : 0;
   if (safeFee === 0 || mode === "upfront") {
@@ -675,25 +698,45 @@ export function planSetupFee(
       fee: safeFee,
       mode: "upfront",
       months: 0,
+      rate: 0,
       monthly: 0,
       lastMonthly: 0,
+      totalInterest: 0,
+      totalPaid: safeFee,
       firstAddition: safeFee,
     };
   }
 
-  const raw = mode === "full-term" ? loanMonths : spreadCount;
-  const n = Math.max(1, Math.min(Math.round(raw || 0), Math.round(loanMonths) || Infinity));
-  const monthly = round2(safeFee / n);
-  // התשלום האחרון של העמלה סוגר את ההפרש המצטבר של העיגול
-  const lastMonthly = round2(safeFee - monthly * (n - 1));
+  // ברירת המחדל: פריסה לכל תקופת המימון
+  const requested = Math.round(spreadCount || 0) || Math.round(loanMonths) || 0;
+  const n = Math.max(1, requested);
+
+  // פריסת העמלה היא הלוואת שפיצר עצמאית בריבית שלה
+  const spread = spitzerLoan(safeFee, ratePct, n, 0, 0, method);
+  if (!spread.ok) {
+    return {
+      fee: safeFee,
+      mode: "spread",
+      months: n,
+      rate: ratePct,
+      monthly: 0,
+      lastMonthly: 0,
+      totalInterest: 0,
+      totalPaid: safeFee,
+      firstAddition: 0,
+    };
+  }
 
   return {
     fee: safeFee,
-    mode,
+    mode: "spread",
     months: n,
-    monthly,
-    lastMonthly,
-    firstAddition: n === 1 ? lastMonthly : monthly,
+    rate: ratePct,
+    monthly: spread.monthly,
+    lastMonthly: spread.lastPayment,
+    totalInterest: spread.totalInterest,
+    totalPaid: spread.totalPaid,
+    firstAddition: spread.schedule[0].payment,
   };
 }
 
@@ -704,8 +747,10 @@ export interface FeeApplied {
   paymentDuringFee: number;
   /** התשלום לאחר שהעמלה סיימה להיפרס */
   paymentAfterFee: number;
-  /** סך העמלה */
+  /** סך העמלה (קרן בלבד) */
   totalFee: number;
+  /** סך כל תשלומי העמלה, כולל ריבית הפריסה */
+  totalFeePaid: number;
 }
 
 /** שילוב תוכנית העמלה עם תוצאת ההלוואה — להצגה נפרדת בממשק */
@@ -718,6 +763,7 @@ export function applyFeeToLoan(loan: LoanSummary, plan: FeePlan): FeeApplied {
     paymentDuringFee: plan.months > 0 ? loanRegular + plan.monthly : loanRegular,
     paymentAfterFee: loanRegular,
     totalFee: plan.fee,
+    totalFeePaid: plan.totalPaid,
   };
 }
 

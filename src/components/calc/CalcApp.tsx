@@ -17,6 +17,7 @@ import BalloonSpreadCalc from "./BalloonSpreadCalc";
 import IndexCalc from "./IndexCalc";
 import KnowledgeCenter from "./KnowledgeCenter";
 import LiveDataCard from "./LiveDataCard";
+import SetupFeeCalc from "./SetupFeeCalc";
 import SubsidyCalc from "./SubsidyCalc";
 import TracksInfo from "./TracksInfo";
 import { BalloonCalc, DownCalc, FinPctCalc, InterestCalc } from "./SimpleCalcs";
@@ -31,7 +32,8 @@ type CalcId =
   | "interest"
   | "finpct"
   | "down"
-  | "balloon";
+  | "balloon"
+  | "setupfee";
 
 interface CalcMeta {
   id: CalcId;
@@ -56,6 +58,7 @@ const QUICK_CALCS: CalcMeta[] = [
   { id: "finpct", icon: "📈", title: "אחוז מימון", desc: "אחוז המימון לפי מחיר הרכב והמקדמה" },
   { id: "down", icon: "💵", title: "מחשבון מקדמה", desc: "כמה מקדמה צריך לפי אחוז המימון" },
   { id: "balloon", icon: "📊", title: "מחשבון בלון", desc: "סכום הבלון וההלוואה לאחר המקדמה" },
+  { id: "setupfee", icon: "🧾", title: "עמלת הקמה", desc: "חישוב העמלה ופריסתה לתשלומים בריבית 9.5%" },
 ];
 
 const CALCS: CalcMeta[] = [...MAIN_CALCS, ...QUICK_CALCS];
@@ -190,6 +193,7 @@ export default function CalcApp() {
           {screen === "finpct" && <FinPctCalc />}
           {screen === "down" && <DownCalc settings={settings} />}
           {screen === "balloon" && <BalloonCalc />}
+          {screen === "setupfee" && <SetupFeeCalc />}
         </main>
 
         <footer className="sn-footer">נבנה באהבה עבור נוי 💙</footer>
