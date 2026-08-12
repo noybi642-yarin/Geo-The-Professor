@@ -1066,6 +1066,189 @@ input {
   color: #a02020;
 }
 
+/* ─── מרכז הידע ─────────────────────────────────────────────── */
+
+.kb-search {
+  padding-left: 16px !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+}
+
+.kb-count {
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-dark);
+}
+
+.kb-disclaimer {
+  font-size: 12.5px;
+}
+
+.kb-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .kb-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.kb-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  text-align: start;
+  background: var(--card);
+  border-radius: 16px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow-card);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  animation: fade-up 0.35s ease both;
+}
+
+.kb-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.kb-card:active {
+  transform: scale(0.98);
+}
+
+.kb-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent-dark);
+}
+
+.kb-card-preview {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.kb-flag {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #8a5d05;
+  background: #fff7e6;
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.kb-back {
+  align-self: flex-start;
+}
+
+.kb-item-title {
+  font-size: 21px;
+  font-weight: 800;
+  color: var(--accent-dark);
+  margin-bottom: 16px;
+}
+
+.kb-note {
+  margin-bottom: 16px;
+}
+
+.kb-summary {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.kb-summary li {
+  position: relative;
+  padding-inline-start: 20px;
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.kb-summary li::before {
+  content: "•";
+  position: absolute;
+  inset-inline-start: 4px;
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.kb-actions {
+  margin-top: 20px;
+  margin-bottom: 0;
+}
+
+.mini-btn.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.kb-quotes {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: fade-up 0.25s ease both;
+}
+
+.kb-quote {
+  background: var(--input-bg);
+  border-inline-start: 4px solid var(--accent);
+  border-radius: 12px;
+  padding: 13px 16px;
+}
+
+.kb-quote-ref {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--accent-dark);
+  margin-bottom: 7px;
+}
+
+.kb-origin {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.kb-origin-contract {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+
+.kb-origin-training {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.kb-quote p {
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: var(--text-2);
+}
+
+.kb-quote-foot {
+  font-size: 11.5px;
+  color: var(--text-3);
+  line-height: 1.6;
+}
+
 /* ─── כרטיס נתונים עדכניים ──────────────────────────────────── */
 
 .live-card {
