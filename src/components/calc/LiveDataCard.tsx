@@ -1,28 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { fmtNum, fmtPct, round2 } from "@/lib/finance";
-import { hebrewMonth, PRIME_SPREAD, type LiveData } from "@/lib/liveData";
-import CpiHistoryModal, { ChangeMark } from "./CpiHistoryModal";
-
-const CACHE_KEY = "sn.liveData.v1";
-
-interface Cached {
-  data: LiveData;
-  savedAt: string;
-}
-
-const fmtStamp = (iso: string) => {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "—";
-  return new Intl.DateTimeFormat("he-IL", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(d);
-};
+import { hebrewMonth, PRIME_SPREAD } from "@/lib/liveData";
+import { fmtStamp, useLiveData } from "@/lib/useLiveData";
+import { ChangeMark } from "./CpiHistory";
 
 /**
  * כרטיס "נתונים עדכניים".
@@ -31,80 +13,7 @@ const fmtStamp = (iso: string) => {
  * מוצג הנתון האחרון שהתקבל עם הודעה — לעולם לא ערך מומצא או 0.
  */
 export default function LiveDataCard() {
-  const [data, setData] = useState<LiveData | null>(null);
-  const [savedAt, setSavedAt] = useState<string | null>(null);
-  const [stale, setStale] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [showHistory, setShowHistory] = useState(false);
-  const mounted = useRef(true);
-
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-
-  /** מיזוג: כל שדה שהתקבל מתעדכן, שדה שנכשל שומר על הערך האחרון הידוע */
-  const merge = useCallback((fresh: LiveData, prev: LiveData | null): LiveData => {
-    if (!prev) return fresh;
-    return {
-      cpi: fresh.cpi ?? prev.cpi,
-      cpiHistory: fresh.cpiHistory ?? prev.cpiHistory ?? null,
-      boi: fresh.boi ?? prev.boi,
-      prime: fresh.prime ?? prev.prime,
-      fetchedAt: fresh.fetchedAt,
-      errors: fresh.errors,
-    };
-  }, []);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    let cached: Cached | null = null;
-    try {
-      const raw = localStorage.getItem(CACHE_KEY);
-      if (raw) cached = JSON.parse(raw) as Cached;
-    } catch {}
-
-    // מציגים מיד את הנתון השמור, כדי שהכרטיס לא יהיה ריק בזמן המשיכה
-    if (cached?.data) {
-      setData(cached.data);
-      setSavedAt(cached.savedAt);
-    }
-
-    try {
-      const res = await fetch("/api/live-data", { cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const fresh = (await res.json()) as LiveData;
-      if (!mounted.current) return;
-
-      const gotSomething = !!(fresh.cpi || fresh.boi);
-      const merged = merge(fresh, cached?.data ?? null);
-      setData(merged);
-
-      if (gotSomething) {
-        const savedStamp = fresh.fetchedAt;
-        setSavedAt(savedStamp);
-        try {
-          localStorage.setItem(
-            CACHE_KEY,
-            JSON.stringify({ data: merged, savedAt: savedStamp } satisfies Cached)
-          );
-        } catch {}
-      }
-      // "לא התעדכן" = חלק מהנתונים לא הגיעו במשיכה הנוכחית
-      setStale(fresh.errors.length > 0);
-    } catch {
-      if (!mounted.current) return;
-      setStale(true);
-    } finally {
-      if (mounted.current) setLoading(false);
-    }
-  }, [merge]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { data, savedAt, stale, loading, reload } = useLiveData();
 
   const hasAny = !!(data?.cpi || data?.boi);
 
@@ -117,7 +26,7 @@ export default function LiveDataCard() {
         <button
           type="button"
           className="mini-btn"
-          onClick={() => void load()}
+          onClick={reload}
           disabled={loading}
         >
           {loading ? "⏳ מרענן…" : "🔄 רענון נתונים"}
@@ -135,11 +44,10 @@ export default function LiveDataCard() {
       ) : (
         <>
           <div className="live-grid">
-            <button
-              type="button"
+            <Link
+              href="/cpi-history"
               className="live-item live-item-btn"
-              onClick={() => setShowHistory(true)}
-              aria-label="פתיחת היסטוריית מדד המחירים לצרכן"
+              aria-label="מעבר לעמוד היסטוריית מדד המחירים לצרכן"
             >
               <span className="live-label">
                 מדד המחירים לצרכן
@@ -156,7 +64,7 @@ export default function LiveDataCard() {
                   ? `${data!.cpi.monthName || hebrewMonth(data!.cpi.month)} ${data!.cpi.year}`
                   : "לא זמין"}
               </span>
-            </button>
+            </Link>
 
             <div className="live-item">
               <span className="live-label">ריבית בנק ישראל</span>
@@ -182,13 +90,6 @@ export default function LiveDataCard() {
           </div>
 
           {data!.cpi?.base && <div className="live-foot">בסיס המדד: {data!.cpi.base}</div>}
-          {showHistory && (
-            <CpiHistoryModal
-              history={data!.cpiHistory}
-              onClose={() => setShowHistory(false)}
-            />
-          )}
-
           <div className="live-foot">
             עודכן: {savedAt ? fmtStamp(savedAt) : "—"}
             {" · "}
