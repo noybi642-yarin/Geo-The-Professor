@@ -2,7 +2,7 @@
 // חיפוש מקומי ומיידי, ללא קריאות רשת. תומך במילים דומות:
 // חיפוש "ביטוח" מאתר גם "פוליסה", "ביטוח מקיף" ו"שעבוד פוליסה".
 
-import type { KnowledgeItem, KnowledgeSource } from "./types.ts";
+import type { DocGroup, KnowledgeItem, KnowledgeSource } from "./types.ts";
 
 /**
  * קבוצות מילים נרדפות. כל מילה בקבוצה מרחיבה את החיפוש לכל
@@ -31,15 +31,29 @@ const SYNONYM_GROUPS: string[][] = [
   ["מוכר הרכב", "משרד הרישוי", "העברת בעלות", "רישום"],
 ];
 
-/** מנרמל טקסט לחיפוש: אחיד לגרשיים, ניקוד ורווחים */
+/** מנרמל טקסט לחיפוש: אחיד לגרשיים, ניקוד, פסיקי אלפים ורווחים */
 function normalize(s: string): string {
   return s
     .toLowerCase()
     .replace(/[֑-ׇ]/g, "") // ניקוד וטעמים
     .replace(/["'״׳`]/g, "")
     .replace(/[־–—]/g, "-")
+    .replace(/(\d),(\d)/g, "$1$2") // 350,000 ו-350000 הם אותו מספר
     .replace(/\s+/g, " ")
     .trim();
+}
+
+const ONLY_DIGITS = /^\d+$/;
+
+/**
+ * התאמה של מונח בתוך טקסט.
+ * טקסט רגיל נבדק כתת-מחרוזת — כך ״מע״ מאתר גם ״מע״מ״.
+ * מספר, לעומת זאת, נבדק כמספר שלם: בלי זה החיפוש ״500״ היה
+ * מתאים גם ל-350000, שמכיל את הרצף הזה במקרה.
+ */
+function matches(haystack: string, needle: string): boolean {
+  if (!ONLY_DIGITS.test(needle)) return haystack.includes(needle);
+  return new RegExp(`(^|\\D)${needle}(\\D|$)`).test(haystack);
 }
 
 /**
@@ -63,6 +77,23 @@ export interface SearchHit {
   score: number;
   /** השורות בתקציר שהתאימו לחיפוש */
   matchedLines: string[];
+  /**
+   * המדרגה שכל מילות החיפוש נמצאו בתוכה — כדי שמונח כמו
+   * ״350 אלף״ יפתח ישירות את המדרגה הנכונה ולא רק את סוג הלקוח.
+   */
+  matchedTierId?: string;
+}
+
+/** כל הטקסט שבקבוצת דרישות, לצורך חיפוש */
+function groupText(g: DocGroup): string[] {
+  return [
+    normalize(g.title),
+    g.note ? normalize(g.note) : "",
+    g.footnote ? normalize(g.footnote) : "",
+    ...(g.items ?? []).map(normalize),
+    ...(g.alternatives ?? []).map(normalize),
+    ...(g.options ?? []).flatMap((o) => [normalize(o.label), ...o.items.map(normalize)]),
+  ];
 }
 
 /**
@@ -86,13 +117,18 @@ export function searchSource(source: KnowledgeSource, query: string): SearchHit[
     const quotes = (item.quotes ?? []).map((x) => normalize(x.text + " " + x.ref));
     const note = item.note ? normalize(item.note) : "";
     // דרישות מובנות (מסמכים לפי סוג לקוח) נסרקות ברמת מילות המפתח
-    const groups = (item.groups ?? []).flatMap((g) => [
-      normalize(g.title),
-      g.note ? normalize(g.note) : "",
-      g.footnote ? normalize(g.footnote) : "",
-      ...(g.items ?? []).map(normalize),
-      ...(g.options ?? []).flatMap((o) => [normalize(o.label), ...o.items.map(normalize)]),
-    ]);
+    const groups = (item.groups ?? []).flatMap(groupText);
+    // כל מדרגה נסרקת גם בנפרד, כדי לדעת לאיזו מהן להוביל
+    const tiers = (item.tiers ?? []).map((t) => ({
+      id: t.id,
+      text: [
+        normalize(t.label),
+        t.note ? normalize(t.note) : "",
+        ...(t.keywords ?? []).map(normalize),
+        ...t.groups.flatMap(groupText),
+      ],
+    }));
+    const tierText = tiers.flatMap((t) => t.text);
 
     let total = 0;
     let allWordsMatched = true;
@@ -102,12 +138,13 @@ export function searchSource(source: KnowledgeSource, query: string): SearchHit[
       for (const v of variants) {
         if (!v) continue;
         // ניקוד לפי מקום ההתאמה — כותרת שווה יותר מציטוט
-        if (title.includes(v)) best = Math.max(best, 100);
-        if (keywords.some((k) => k.includes(v))) best = Math.max(best, 60);
-        if (summary.some((s) => s.includes(v))) best = Math.max(best, 40);
-        if (groups.some((g) => g.includes(v))) best = Math.max(best, 50);
-        if (note.includes(v)) best = Math.max(best, 30);
-        if (quotes.some((t) => t.includes(v))) best = Math.max(best, 20);
+        if (matches(title, v)) best = Math.max(best, 100);
+        if (keywords.some((k) => matches(k, v))) best = Math.max(best, 60);
+        if (summary.some((s) => matches(s, v))) best = Math.max(best, 40);
+        if (groups.some((g) => matches(g, v))) best = Math.max(best, 50);
+        if (tierText.some((t) => matches(t, v))) best = Math.max(best, 50);
+        if (matches(note, v)) best = Math.max(best, 30);
+        if (quotes.some((t) => matches(t, v))) best = Math.max(best, 20);
       }
       if (best === 0) {
         allWordsMatched = false;
@@ -118,13 +155,21 @@ export function searchSource(source: KnowledgeSource, query: string): SearchHit[
 
     if (!allWordsMatched) continue;
 
+    // המדרגה הראשונה שכל מילות החיפוש נמצאות בתוכה. אין כזו —
+    // ההתאמה היא ברמת סוג הלקוח, והמדרגה נשארת כברירת המחדל.
+    const matchedTierId = tiers.find((t) =>
+      wordVariants.every((variants) =>
+        variants.some((v) => v && t.text.some((line) => matches(line, v)))
+      )
+    )?.id;
+
     // השורות בתקציר שיש בהן התאמה — להצגה כתצוגה מקדימה
     const matchedLines = item.summary.filter((line) => {
       const n = normalize(line);
-      return wordVariants.some((variants) => variants.some((v) => v && n.includes(v)));
+      return wordVariants.some((variants) => variants.some((v) => v && matches(n, v)));
     });
 
-    hits.push({ item, score: total, matchedLines });
+    hits.push({ item, score: total, matchedLines, matchedTierId });
   }
 
   hits.sort((a, b) => b.score - a.score);

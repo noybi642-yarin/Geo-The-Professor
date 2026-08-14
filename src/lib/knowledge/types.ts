@@ -29,10 +29,31 @@ export interface DocGroup {
   note?: string;
   /** רשימה פשוטה, כשאין חלופות */
   items?: string[];
+  /**
+   * מסמכים חליפיים שאחד מהם מספיק — מוצגים בשורה אחת עם ״או״
+   * ביניהם. שונה מ-options, שמציג בלוקים שלמים זה מול זה.
+   */
+  alternatives?: string[];
   /** חלופות — מוצגות עם ״או״ ביניהן */
   options?: DocOption[];
   /** הערת שוליים מתחת לקבוצה */
   footnote?: string;
+}
+
+/**
+ * מדרגת הכנסה או אובליגו בתוך סוג לקוח.
+ * הדרישות משתנות לפי גובה האובליגו, ולכן הן נבחרות בשלב שני —
+ * אחרי בחירת סוג הלקוח — במקום להעמיס את כולן על המסך בבת אחת.
+ */
+export interface DocTier {
+  id: string;
+  /** תווית המדרגה, למשל ״אובליגו מעל 350,000 ₪״ */
+  label: string;
+  /** משפט הקשר קצר מתחת לבורר המדרגות */
+  note?: string;
+  groups: DocGroup[];
+  /** מונחי חיפוש שמובילים ישירות למדרגה הזו */
+  keywords?: string[];
 }
 
 export interface KnowledgeItem {
@@ -49,6 +70,11 @@ export interface KnowledgeItem {
   quotes?: Quote[];
   /** דרישות מובנות — מוצגות בתצוגת הטאבים */
   groups?: DocGroup[];
+  /**
+   * מדרגות הכנסה/אובליגו. כשיש יותר ממדרגה אחת מוצג בורר;
+   * כשיש אחת בלבד תוויתה מוצגת כהקשר, בלי לבקש בחירה.
+   */
+  tiers?: DocTier[];
   /** מילים נוספות לחיפוש שאינן מופיעות בכותרת או בתקציר */
   keywords: string[];
   /** הערה על סתירה או נתון שדורש אימות */
@@ -71,6 +97,8 @@ export interface KnowledgeSource {
   origins: string;
   /** הבהרה שמוצגת בראש המקור */
   disclaimer: string;
+  /** כלל רוחבי שנכון לכל הפריטים — מוצג פעם אחת בראש המקור */
+  intro?: { title: string; lines: string[] };
   /** ברירת המחדל היא categories — כדי לא לשנות מקורות קיימים */
   view?: SourceView;
   items: KnowledgeItem[];

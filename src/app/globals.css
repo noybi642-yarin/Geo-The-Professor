@@ -1252,13 +1252,61 @@ input {
 /* ─── מסמכים לפי סוג לקוח ───────────────────────────────────── */
 
 .kb-tabs {
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, 1fr);
 }
 
 @media (min-width: 520px) {
   .kb-tabs {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
+}
+
+/* בורר המדרגה — שלב שני, ולכן קל יותר מהטאבים שמעליו */
+.kb-tiers {
+  margin-top: 12px;
+}
+
+.kb-tiers .chip {
+  font-variant-numeric: normal;
+}
+
+/* מדרגה יחידה: הקשר, לא בחירה */
+.kb-tier-label {
+  display: inline-block;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 4px 12px;
+  margin-bottom: 14px;
+}
+
+.kb-tier-note {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--text-2);
+  margin-bottom: 16px;
+}
+
+.kb-intro-line {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text-2);
+}
+
+.kb-intro-line + .kb-intro-line {
+  margin-top: 10px;
+}
+
+.kb-card-tier {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 3px 10px;
 }
 
 .doc-group {
@@ -1313,6 +1361,36 @@ input {
   inset-inline-start: 0;
   color: var(--success);
   font-weight: 800;
+}
+
+/* מסמכים חליפיים — אחד מהם מספיק, ולכן שורה אחת ולא בלוקים */
+.doc-alts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.doc-alt-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.doc-alt {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 14px;
+}
+
+.doc-alt-or {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-3);
 }
 
 .doc-options {
