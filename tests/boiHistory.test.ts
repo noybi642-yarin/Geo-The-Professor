@@ -8,7 +8,9 @@ import {
   buildBoiHistory,
   calcPrime,
   parseBoi,
+  pickPolicyRateSeries,
   rateChangePts,
+  sdmxSeriesList,
   withRateChange,
   type BoiReading,
 } from "../src/lib/liveData.ts";
@@ -138,6 +140,132 @@ test("withRateChange — אינו משנה את המערך המקורי", () => 
   const out = withRateChange(series);
   assert.equal(series[0].changePts, undefined);
   close(out[0].changePts!, -0.25);
+});
+
+// ─── בחירת הסדרה הנכונה מתוך עולם תוכן רב-סדרתי ────────────────
+
+/**
+ * תשובת SDMX עם כמה סדרות תחת אותו dataflow, כפי שמקובל בעולמות
+ * התוכן של בנק ישראל. names הוא שמות ערכי המימד הראשון.
+ */
+const sdmxMulti = (names: string[], rows: string[], valuesPerSeries: number[][]) => ({
+  data: {
+    dataSets: [
+      {
+        series: Object.fromEntries(
+          names.map((_, si) => [
+            `${si}:0`,
+            {
+              observations: Object.fromEntries(
+                valuesPerSeries[si].map((v, i) => [String(i), [v]])
+              ),
+            },
+          ])
+        ),
+      },
+    ],
+    structures: [
+      {
+        dimensions: {
+          series: [
+            { id: "SERIES_CODE", values: names.map((n, i) => ({ id: `S${i}`, name: n })) },
+            { id: "FREQ", values: [{ id: "M", name: "חודשי" }] },
+          ],
+          observation: [{ values: rows.map((id) => ({ id })) }],
+        },
+      },
+    ],
+  },
+});
+
+test("סדרות — כל סדרה מקבלת תווית מתוך שמות ערכי המימדים", () => {
+  const p = sdmxMulti(
+    ["ריבית בנק ישראל", "תשואת מק״מ לשנה"],
+    ["2026-05", "2026-06"],
+    [
+      [4.5, 4.25],
+      [4.1, 4.05],
+    ]
+  );
+  const list = sdmxSeriesList(p);
+  assert.equal(list.length, 2);
+  assert.equal(list[0].label, "ריבית בנק ישראל · חודשי");
+  assert.equal(list[1].label, "תשואת מק״מ לשנה · חודשי");
+  assert.equal(list[0].readings[0].rate, 4.25, "החדשה ביותר ראשונה");
+  assert.equal(list[0].readings[0].effectiveDate, "2026-06");
+});
+
+test("בחירה — סדרה יחידה נבחרת גם ללא תווית", () => {
+  const list = sdmxSeriesList(sdmx([["2026-05", 4.5], ["2026-06", 4.25]]));
+  assert.equal(list.length, 1);
+  assert.equal(pickPolicyRateSeries(list)!.readings[0].rate, 4.25);
+});
+
+test("בחירה — מתוך כמה סדרות נבחרת רק זו שתוויתה מזהה ריבית בנק ישראל", () => {
+  const p = sdmxMulti(
+    ["תשואת מק״מ לשנה", "ריבית בנק ישראל"],
+    ["2026-05", "2026-06"],
+    [
+      [4.1, 4.05],
+      [4.5, 4.25],
+    ]
+  );
+  const chosen = pickPolicyRateSeries(sdmxSeriesList(p))!;
+  assert.equal(chosen.readings[0].rate, 4.25, "לא נבחרה סדרת המק״מ");
+
+  const h = buildBoiHistory(p)!;
+  assert.equal(h[0].rate, 4.25);
+  close(h[0].changePts!, -0.25, 1e-12);
+  assert.equal(parseBoi(p)!.rate, 4.25);
+});
+
+test("בחירה — כשאי אפשר להכריע לא מוצגת סדרה כלל", () => {
+  // שתי סדרות ללא תווית מזהה — הצגת אחת מהן הייתה ניחוש
+  const p = sdmxMulti(
+    ["תשואת מק״מ לשנה", "ריבית ממוצעת על אשראי"],
+    ["2026-05", "2026-06"],
+    [
+      [4.1, 4.05],
+      [6.2, 6.1],
+    ]
+  );
+  assert.equal(pickPolicyRateSeries(sdmxSeriesList(p)), null);
+  assert.equal(buildBoiHistory(p), null, "עדיף בלי היסטוריה מאשר סדרה שגויה");
+  assert.equal(parseBoi(p), null);
+});
+
+test("בחירה — שתי סדרות שנראות שתיהן כריבית המדיניות אינן מוכרעות", () => {
+  const p = sdmxMulti(
+    ["ריבית בנק ישראל — יומי", "ריבית בנק ישראל — חודשי"],
+    ["2026-05", "2026-06"],
+    [
+      [4.5, 4.25],
+      [4.5, 4.25],
+    ]
+  );
+  assert.equal(pickPolicyRateSeries(sdmxSeriesList(p)), null);
+});
+
+test("סדרות — מבנה בצורת structure יחיד נתמך כמו structures", () => {
+  const rows = ["2026-05", "2026-06"];
+  const p = {
+    data: {
+      dataSets: [{ series: { "0:0": { observations: { "0": [4.5], "1": [4.25] } } } }],
+      structure: {
+        dimensions: {
+          series: [
+            { id: "SERIES_CODE", values: [{ id: "S0", name: "ריבית בנק ישראל" }] },
+            { id: "FREQ", values: [{ id: "M", name: "חודשי" }] },
+          ],
+          observation: [{ values: rows.map((id) => ({ id })) }],
+        },
+      },
+    },
+  };
+  const list = sdmxSeriesList(p);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].label, "ריבית בנק ישראל · חודשי");
+  assert.equal(list[0].readings[0].effectiveDate, "2026-06");
 });
 
 // ─── בידוד כשלים ───────────────────────────────────────────────

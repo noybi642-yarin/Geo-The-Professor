@@ -6,6 +6,7 @@ import {
   calcPrime,
   CPI_FETCH_RECORDS,
   parseBoi,
+  sdmxSeriesList,
   type BoiReading,
   type CpiReading,
   type LiveData,
@@ -26,18 +27,33 @@ const CPI_ENDPOINTS = [
 ];
 
 // ה-PublicApi מאומת ומחזיר את הריבית הנוכחית, אך ללא סדרה
-// היסטורית. הכתובות שאחריו הן מועמדות להיסטוריה בלבד — הן נוסו
+// היסטורית. הכתובות שאחריו הן מועמדות להיסטוריה בלבד — הן נוסות
 // בסדר הזה, וכל כשל שלהן אינו פוגע בריבית הנוכחית.
-// ⚠️ ה-dataflow שנוסה תחת BOI.STATISTICS/RATE_BOI החזיר 404;
-// הכתובת הנכונה להיסטוריה טרם אותרה.
+// ⚠️ BOI.STATISTICS/RATE_BOI החזיר 404 בפועל — ה-dataflow הזה
+// אינו קיים. לפי מדריך השליפה של בנק ישראל מזהה עולם התוכן של
+// הריבית הוא BIR, ולכן זה מה שנוסה כאן, בשני נתיבי ה-API של
+// FusionEdge: נתיב SDMX v2 ונתיב ws/public בתחביר SDMX 2.1.
+const EDGE = "https://edge.boi.gov.il/FusionEdgeServer";
 const BOI_ENDPOINTS = [
   "https://boi.org.il/PublicApi/GetInterest",
-  "https://boi.org.il/PublicApi/GetInterestRates",
-  "https://boi.org.il/PublicApi/GetInterestList",
-  `https://edge.boi.gov.il/FusionEdgeServer/sdmx/v2/data/dataflow/BOI.STATISTICS/RATE_BOI/1.0/all?format=jsondata&lastNObservations=${BOI_FETCH_RECORDS}`,
+  `${EDGE}/sdmx/v2/data/dataflow/BOI.STATISTICS/BIR/1.0/all?format=jsondata&lastNObservations=${BOI_FETCH_RECORDS}`,
+  `${EDGE}/ws/public/sdmxapi/rest/data/BOI.STATISTICS,BIR,1.0/all?format=jsondata&lastNObservations=${BOI_FETCH_RECORDS}`,
+];
+
+/**
+ * בדיקות אבחון בלבד — נמשכות רק כאשר ?debug=1, ולעולם אינן
+ * משמשות להצגת נתון. מטרתן לגלות אילו עולמות תוכן קיימים בפועל
+ * ומהו מבנה סדרת הריבית, במקום לנחש כתובות אחת אחרי השנייה.
+ */
+const BOI_PROBE_ENDPOINTS = [
+  `${EDGE}/ws/public/sdmxapi/rest/dataflow/BOI.STATISTICS/all/latest?format=sdmx-json&detail=allstubs`,
+  `${EDGE}/sdmx/v2/structure/dataflow/BOI.STATISTICS/*/+?format=sdmx-json&detail=allstubs`,
+  `${EDGE}/ws/public/sdmxapi/rest/schema/dataflow/BOI.STATISTICS/BIR/1.0?format=sdmx-2.1`,
 ];
 
 const TIMEOUT_MS = 9000;
+/** גוף תשובת אבחון נחתך — אין צורך במבנה המלא כדי לזהות מזהים */
+const PROBE_BODY_CHARS = 4000;
 
 interface Attempt {
   url: string;
@@ -46,6 +62,16 @@ interface Attempt {
   error?: string;
   /** גוף התשובה — מוחזר רק במצב debug */
   body?: unknown;
+}
+
+/** תיאור סדרה שנמצאה בתשובת SDMX — לאבחון בלבד */
+interface SeriesNote {
+  url: string;
+  key: string;
+  label: string;
+  count: number;
+  latest?: number;
+  latestPeriod?: string;
 }
 
 async function fetchJson(
@@ -84,6 +110,32 @@ async function fetchJson(
   }
 }
 
+/** משיכת טקסט גולמי קצוץ, לאבחון בלבד */
+async function probe(url: string): Promise<Attempt> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { "User-Agent": "shalom-noy-calc/1.0" },
+      cache: "no-store",
+    });
+    const text = await res.text();
+    return {
+      url,
+      status: res.status,
+      ok: res.ok,
+      error: res.ok ? undefined : `HTTP ${res.status}`,
+      body: text.slice(0, PROBE_BODY_CHARS),
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? (e.name === "AbortError" ? "timeout" : e.message) : "שגיאה";
+    return { url, ok: false, error: msg };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** מנסה את המקורות לפי הסדר עד שאחד מהם מחזיר נתון שניתן לפענח */
 async function resolve<T>(
   urls: string[],
@@ -116,8 +168,10 @@ async function resolveBoi(): Promise<{
   rate: BoiReading | null;
   history: BoiReading[] | null;
   attempts: Attempt[];
+  series: SeriesNote[];
 }> {
   const attempts: Attempt[] = [];
+  const series: SeriesNote[] = [];
   let rate: BoiReading | null = null;
   let history: BoiReading[] | null = null;
 
@@ -128,6 +182,17 @@ async function resolveBoi(): Promise<{
       attempts.push(attempt);
       continue;
     }
+    // תיעוד הסדרות שנמצאו — כך אפשר לראות מדוע סדרה לא נבחרה
+    for (const s of sdmxSeriesList(json)) {
+      series.push({
+        url: BOI_ENDPOINTS[i],
+        key: s.key,
+        label: s.label,
+        count: s.readings.length,
+        latest: s.readings[0]?.rate,
+        latestPeriod: s.readings[0]?.effectiveDate,
+      });
+    }
     const gotRate: BoiReading | null = rate ?? parseBoi(json);
     const gotHistory: BoiReading[] | null = history ?? buildBoiHistory(json);
     const useful = (!rate && gotRate) || (!history && gotHistory);
@@ -136,7 +201,7 @@ async function resolveBoi(): Promise<{
     history = gotHistory;
   }
 
-  return { rate, history, attempts };
+  return { rate, history, attempts, series };
 }
 
 export async function GET(request: Request) {
@@ -176,6 +241,9 @@ export async function GET(request: Request) {
     errors,
   };
 
+  // בדיקות האבחון נמשכות רק במצב debug, ולעולם אינן מזינות נתון מוצג
+  const probes = debug ? await Promise.all(BOI_PROBE_ENDPOINTS.map(probe)) : [];
+
   // 200 גם בכשל חלקי — הלקוח מציג את מה שהתקבל ומשלים מהמטמון המקומי
   return NextResponse.json(
     debug
@@ -184,13 +252,18 @@ export async function GET(request: Request) {
           _debug: {
             cpi: cpiRes.attempts,
             boi: boiRes.attempts,
+            boiSeries: boiRes.series,
+            boiProbes: probes,
           },
         }
       : data,
     {
       headers: {
-        // מטמון ב-CDN של Vercel לשעה, עם הגשה מהמטמון בזמן רענון ברקע
-        "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400",
+        // מטמון ב-CDN של Vercel לשעה, עם הגשה מהמטמון בזמן רענון ברקע.
+        // תשובת אבחון אינה נשמרת במטמון — היא נועדה לבדיקה חוזרת מיידית.
+        "Cache-Control": debug
+          ? "no-store"
+          : "public, s-maxage=3600, stale-while-revalidate=86400",
       },
     }
   );

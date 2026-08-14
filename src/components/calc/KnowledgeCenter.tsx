@@ -6,11 +6,23 @@ import {
   ORIGIN_LABEL,
   searchAll,
   searchSource,
+  type DocTier,
   type KnowledgeItem,
   type KnowledgeSource,
 } from "@/lib/knowledge/index.ts";
 import { copyText } from "@/lib/finance";
 import { useToast } from "./shared";
+
+/** תקציר בשורה אחת של מה שהמדרגה דורשת — לתצוגה מקדימה בכרטיס */
+function tierPreview(tier: DocTier | undefined): string | null {
+  if (!tier) return null;
+  const wanted = tier.groups.flatMap((g) => [
+    ...(g.items ?? []),
+    ...(g.alternatives ?? []),
+    ...(g.options ?? []).flatMap((o) => o.items),
+  ]);
+  return wanted.length > 0 ? wanted.join(" · ") : null;
+}
 
 /**
  * מרכז הידע.
@@ -24,6 +36,7 @@ export default function KnowledgeCenter() {
   );
   const [homeQuery, setHomeQuery] = useState("");
   const [jumpTo, setJumpTo] = useState<string | null>(null);
+  const [jumpTier, setJumpTier] = useState<string | null>(null);
 
   const source = KNOWLEDGE_SOURCES.find((s) => s.id === openSource);
 
@@ -31,8 +44,9 @@ export default function KnowledgeCenter() {
   // יגיע לתוצאה גם בלי לדעת מראש באיזה כרטיס הוא יושב
   const globalHits = useMemo(() => searchAll(KNOWLEDGE_SOURCES, homeQuery), [homeQuery]);
 
-  const open = (sourceId: string, itemId: string) => {
+  const open = (sourceId: string, itemId: string, tierId?: string) => {
     setJumpTo(itemId);
+    setJumpTier(tierId ?? null);
     setOpenSource(sourceId);
   };
 
@@ -64,22 +78,30 @@ export default function KnowledgeCenter() {
                   {s.icon} {s.title} · {hits.length} תוצאות
                 </h2>
                 <div className="kb-grid">
-                  {hits.map(({ item, matchedLines }, idx) => (
-                    <button
-                      type="button"
-                      key={item.id}
-                      className="kb-card"
-                      style={{ animationDelay: `${Math.min(idx, 12) * 30}ms` }}
-                      onClick={() => open(s.id, item.id)}
-                    >
-                      <span className="kb-card-title">
-                        {item.icon} {item.title}
-                      </span>
-                      <span className="kb-card-preview">
-                        {(matchedLines.length ? matchedLines : item.summary)[0]}
-                      </span>
-                    </button>
-                  ))}
+                  {hits.map(({ item, matchedLines, matchedTierId }, idx) => {
+                    const tier = item.tiers?.find((t) => t.id === matchedTierId);
+                    return (
+                      <button
+                        type="button"
+                        key={item.id}
+                        className="kb-card"
+                        style={{ animationDelay: `${Math.min(idx, 12) * 30}ms` }}
+                        onClick={() => open(s.id, item.id, matchedTierId)}
+                      >
+                        <span className="kb-card-title">
+                          {item.icon} {item.title}
+                        </span>
+                        {/* המדרגה שאליה החיפוש מוביל — כדי שיהיה ברור מראש */}
+                        {tier && <span className="kb-card-tier">{tier.label}</span>}
+                        <span className="kb-card-preview">
+                          {/* כשההתאמה היא במדרגה, התצוגה המקדימה באה ממנה —
+                              שורת תקציר של מדרגה אחרת רק הייתה מבלבלת */}
+                          {tierPreview(tier) ??
+                            (matchedLines.length ? matchedLines : item.summary)[0]}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </section>
             ))
@@ -108,12 +130,15 @@ export default function KnowledgeCenter() {
     KNOWLEDGE_SOURCES.length > 1
       ? () => {
           setJumpTo(null);
+          setJumpTier(null);
           setOpenSource(null);
         }
       : undefined;
 
   if (source.view === "tabs") {
-    return <TabsView source={source} initialItem={jumpTo} onBack={back} />;
+    return (
+      <TabsView source={source} initialItem={jumpTo} initialTier={jumpTier} onBack={back} />
+    );
   }
 
   return <SourceView source={source} initialItem={jumpTo} onBack={back} />;
@@ -124,10 +149,12 @@ export default function KnowledgeCenter() {
 function TabsView({
   source,
   initialItem,
+  initialTier,
   onBack,
 }: {
   source: KnowledgeSource;
   initialItem?: string | null;
+  initialTier?: string | null;
   onBack?: () => void;
 }) {
   const [active, setActive] = useState(
@@ -136,13 +163,31 @@ function TabsView({
       : source.items[0].id
   );
   const item = source.items.find((i) => i.id === active) ?? source.items[0];
+
+  // המדרגה נבחרת בשלב שני. חיפוש שהוביל למדרגה מסוימת פותח אותה.
+  const [tierId, setTierId] = useState<string | null>(initialTier ?? null);
+  const tiers = item.tiers ?? [];
+  const tier = tiers.find((t) => t.id === tierId) ?? tiers[0] ?? null;
+  const groups = tier ? tier.groups : item.groups ?? [];
+
   const notify = useToast();
 
+  /** מעבר לסוג לקוח אחר מתחיל תמיד מהמדרגה הראשונה שלו */
+  const selectItem = (id: string) => {
+    setActive(id);
+    setTierId(null);
+  };
+
   const copyList = async () => {
-    const lines: string[] = [`${item.icon} ${item.title} — מסמכים נדרשים`];
-    for (const g of item.groups ?? []) {
+    const heading = tier
+      ? `${item.icon} ${item.title} · ${tier.label} — מסמכים נדרשים`
+      : `${item.icon} ${item.title} — מסמכים נדרשים`;
+    const lines: string[] = [heading];
+    if (tier?.note) lines.push(tier.note);
+    for (const g of groups) {
       lines.push("", `${g.title}${g.note ? ` (${g.note})` : ""}`);
       for (const x of g.items ?? []) lines.push(`• ${x}`);
+      if (g.alternatives) lines.push(g.alternatives.join(" או "));
       (g.options ?? []).forEach((o, i) => {
         if (i > 0) lines.push("או");
         lines.push(`${o.label}:`);
@@ -161,6 +206,18 @@ function TabsView({
         </button>
       )}
 
+      {/* כלל רוחבי — נכון לכל סוגי הלקוחות, ולכן מוצג פעם אחת */}
+      {source.intro && (
+        <section className="panel kb-intro">
+          <h2 className="panel-title">🔓 {source.intro.title}</h2>
+          {source.intro.lines.map((line, i) => (
+            <p className="kb-intro-line" key={i}>
+              {line}
+            </p>
+          ))}
+        </section>
+      )}
+
       <section className="panel">
         <div className="track-tabs kb-tabs" role="tablist" aria-label="סוג לקוח">
           {source.items.map((it) => (
@@ -170,20 +227,41 @@ function TabsView({
               role="tab"
               aria-selected={active === it.id}
               className={`track-tab${active === it.id ? " on" : ""}`}
-              onClick={() => setActive(it.id)}
+              onClick={() => selectItem(it.id)}
             >
               {it.icon} {it.title}
             </button>
           ))}
         </div>
+
+        {/* שלב שני: מדרגה. מדרגה יחידה מוצגת כהקשר, בלי בורר מיותר */}
+        {tiers.length > 1 && (
+          <div className="chips kb-tiers" role="tablist" aria-label="מדרגת הכנסה או אובליגו">
+            {tiers.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={tier?.id === t.id}
+                className={`chip${tier?.id === t.id ? " on" : ""}`}
+                onClick={() => setTierId(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
-      <section className="panel" key={item.id}>
+      <section className="panel" key={`${item.id}-${tier?.id ?? "base"}`}>
         <h2 className="kb-item-title">
           {item.icon} {item.title}
         </h2>
 
-        {(item.groups ?? []).map((g) => (
+        {tier && tiers.length === 1 && <div className="kb-tier-label">{tier.label}</div>}
+        {tier?.note && <div className="kb-tier-note">{tier.note}</div>}
+
+        {groups.map((g) => (
           <div className="doc-group" key={g.title}>
             <h3 className="doc-group-title">
               {g.title}
@@ -196,6 +274,18 @@ function TabsView({
                   <li key={x}>{x}</li>
                 ))}
               </ul>
+            )}
+
+            {/* מסמכים חליפיים — אחד מהם מספיק */}
+            {g.alternatives && (
+              <div className="doc-alts">
+                {g.alternatives.map((x, i) => (
+                  <span className="doc-alt-wrap" key={x}>
+                    {i > 0 && <span className="doc-alt-or">או</span>}
+                    <span className="doc-alt">{x}</span>
+                  </span>
+                ))}
+              </div>
             )}
 
             {g.options && (
