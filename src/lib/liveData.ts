@@ -20,7 +20,22 @@ export interface CpiReading {
   monthName?: string;
   /** תיאור בסיס המדד, אם נמסר */
   base?: string;
+  /**
+   * שיעור השינוי מול המדד הקודם שפורסם, באחוזים.
+   * מחושב מתוך הערכים עצמם — לא מול מדד הבסיס.
+   * undefined כאשר אין רשומה קודמת להשוואה.
+   */
+  changePct?: number;
 }
+
+/** מספר החודשים שמוצגים בהיסטוריה */
+export const CPI_HISTORY_MONTHS = 12;
+
+/**
+ * מספר הרשומות שיש למשוך: חודש נוסף מעבר לתצוגה, כדי שגם לחודש
+ * הישן ביותר שמוצג יהיה מול מה לחשב שינוי.
+ */
+export const CPI_FETCH_RECORDS = CPI_HISTORY_MONTHS + 1;
 
 export interface BoiReading {
   /** ריבית בנק ישראל באחוזים */
@@ -31,6 +46,11 @@ export interface BoiReading {
 
 export interface LiveData {
   cpi: CpiReading | null;
+  /**
+   * היסטוריית המדד — מהחדש לישן, עד 12 חודשים.
+   * null כאשר ההיסטוריה לא התקבלה; אין לכך השפעה על שאר הנתונים.
+   */
+  cpiHistory?: CpiReading[] | null;
   boi: BoiReading | null;
   /** ריבית פריים מחושבת: boi.rate + PRIME_SPREAD */
   prime: number | null;
@@ -90,11 +110,15 @@ function pick(obj: Record<string, Json>, names: string[]): Json {
 // ─── פענוח מדד המחירים לצרכן (למ״ס) ────────────────────────────
 
 /**
- * מאתר את קריאת המדד העדכנית ביותר בתשובת ה-API של הלמ״ס.
- * מחפש צמתים שיש בהם שנה, חודש וערך — ובוחר את המאוחר ביותר.
+ * מאתר את כל קריאות המדד בתשובת ה-API של הלמ״ס ומחזיר אותן
+ * ממוינות מהחדש לישן, ללא כפילויות.
+ *
+ * הסריקה עוברת על כל הצמתים שיש בהם שנה, חודש וערך. אותה קריאה
+ * עשויה להופיע בכמה רמות קינון, ולכן נשמרת הופעה אחת לכל חודש —
+ * הראשונה, שהיא החיצונית ביותר ולכן העשירה בהקשר.
  */
-export function parseCpi(payload: Json): CpiReading | null {
-  let best: CpiReading | null = null;
+export function parseCpiSeries(payload: Json): CpiReading[] {
+  const byMonth = new Map<string, CpiReading>();
 
   for (const node of walk(payload)) {
     const year = toNumber(pick(node, ["year", "shana", "yearDesc"]));
@@ -117,13 +141,60 @@ export function parseCpi(payload: Json): CpiReading | null {
     const nameRaw = pick(node, ["monthDesc", "monthName", "name"]);
     const monthName = typeof nameRaw === "string" ? nameRaw : undefined;
 
-    const candidate: CpiReading = { value, year, month, monthName, base };
-    if (!best || year > best.year || (year === best.year && month > best.month)) {
-      best = candidate;
-    }
+    const key = `${year}-${month}`;
+    if (!byMonth.has(key)) byMonth.set(key, { value, year, month, monthName, base });
   }
 
-  return best;
+  return Array.from(byMonth.values()).sort(
+    (a, b) => b.year - a.year || b.month - a.month
+  );
+}
+
+/**
+ * מאתר את קריאת המדד העדכנית ביותר.
+ * נשמר כפי שהיה כדי לא לשנות את התנהגות המקור הקיים.
+ */
+export function parseCpi(payload: Json): CpiReading | null {
+  return parseCpiSeries(payload)[0] ?? null;
+}
+
+/**
+ * שיעור השינוי בין שתי קריאות מדד עוקבות, באחוזים:
+ *   ((currentIndex / previousIndex) - 1) × 100
+ *
+ * ההשוואה היא תמיד מול המדד הקודם שפורסם — לא מול מדד הבסיס.
+ * מוחזר בדיוק מלא; העיגול נעשה בתצוגה בלבד.
+ */
+export function monthlyChangePct(current: number, previous: number): number | null {
+  if (!(previous > 0) || !Number.isFinite(current)) return null;
+  return (current / previous - 1) * 100;
+}
+
+/**
+ * מוסיף לכל קריאה בסדרה את שיעור השינוי מול הקריאה שקדמה לה.
+ * הסדרה מגיעה מהחדש לישן, ולכן ה"קודם" הוא האיבר הבא במערך.
+ * הקריאה הישנה ביותר נשארת ללא שינוי מחושב — אין מול מה להשוות.
+ */
+export function withMonthlyChange(series: CpiReading[]): CpiReading[] {
+  return series.map((r, i) => {
+    const prev = series[i + 1];
+    const changePct = prev ? monthlyChangePct(r.value, prev.value) : null;
+    return changePct === null ? { ...r } : { ...r, changePct };
+  });
+}
+
+/**
+ * בונה את היסטוריית המדד להצגה: מוסיף שינוי חודשי וגוזר ל-12
+ * החודשים האחרונים. הרשומה ה-13 משמשת רק לחישוב השינוי של
+ * החודש הישן ביותר שמוצג, ואינה מוצגת בעצמה.
+ */
+export function buildCpiHistory(
+  payload: Json,
+  months = CPI_HISTORY_MONTHS
+): CpiReading[] | null {
+  const series = parseCpiSeries(payload);
+  if (series.length === 0) return null;
+  return withMonthlyChange(series).slice(0, months);
 }
 
 // ─── פענוח ריבית בנק ישראל ─────────────────────────────────────

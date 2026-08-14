@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fmtNum, fmtPct, round2 } from "@/lib/finance";
 import { hebrewMonth, PRIME_SPREAD, type LiveData } from "@/lib/liveData";
+import CpiHistoryModal, { ChangeMark } from "./CpiHistoryModal";
 
 const CACHE_KEY = "sn.liveData.v1";
 
@@ -34,6 +35,7 @@ export default function LiveDataCard() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showHistory, setShowHistory] = useState(false);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -48,6 +50,7 @@ export default function LiveDataCard() {
     if (!prev) return fresh;
     return {
       cpi: fresh.cpi ?? prev.cpi,
+      cpiHistory: fresh.cpiHistory ?? prev.cpiHistory ?? null,
       boi: fresh.boi ?? prev.boi,
       prime: fresh.prime ?? prev.prime,
       fetchedAt: fresh.fetchedAt,
@@ -132,17 +135,28 @@ export default function LiveDataCard() {
       ) : (
         <>
           <div className="live-grid">
-            <div className="live-item">
-              <span className="live-label">מדד המחירים לצרכן</span>
+            <button
+              type="button"
+              className="live-item live-item-btn"
+              onClick={() => setShowHistory(true)}
+              aria-label="פתיחת היסטוריית מדד המחירים לצרכן"
+            >
+              <span className="live-label">
+                מדד המחירים לצרכן
+                <span className="live-more">היסטוריה ←</span>
+              </span>
               <span className="live-value">
                 {data!.cpi ? fmtNum(round2(data!.cpi.value)) : "—"}
               </span>
+              {data!.cpi?.changePct !== undefined ? (
+                <ChangeMark pct={data!.cpi.changePct} suffix="מהמדד הקודם" />
+              ) : null}
               <span className="live-sub">
                 {data!.cpi
                   ? `${data!.cpi.monthName || hebrewMonth(data!.cpi.month)} ${data!.cpi.year}`
                   : "לא זמין"}
               </span>
-            </div>
+            </button>
 
             <div className="live-item">
               <span className="live-label">ריבית בנק ישראל</span>
@@ -168,6 +182,13 @@ export default function LiveDataCard() {
           </div>
 
           {data!.cpi?.base && <div className="live-foot">בסיס המדד: {data!.cpi.base}</div>}
+          {showHistory && (
+            <CpiHistoryModal
+              history={data!.cpiHistory}
+              onClose={() => setShowHistory(false)}
+            />
+          )}
+
           <div className="live-foot">
             עודכן: {savedAt ? fmtStamp(savedAt) : "—"}
             {" · "}
