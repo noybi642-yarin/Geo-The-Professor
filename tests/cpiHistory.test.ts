@@ -226,3 +226,83 @@ test("בידוד — כשל מלא במדד אינו מוגדר כשגיאה ש�
   assert.equal(parseCpi({ error: "cbs down" }), null);
   assert.equal(buildCpiHistory({ error: "cbs down" }), null);
 });
+
+// ─── תשובה אמיתית מהלמ״ס ───────────────────────────────────────
+// נלכדה מהאפליקציה בפרודקשן ב-14.08.2026 דרך /api/live-data?debug=1
+
+const REAL_CBS = {
+  month: [
+    {
+      code: 120010,
+      name: "מדד המחירים לצרכן - כללי",
+      date: [
+        { year: 2026, percent: 0.3, percentYear: 1.5, currBase: { baseDesc: "2024 ממוצע", value: 105.1 }, prevBase: null, month: 7, monthDesc: "יולי" },
+        { year: 2026, percent: 0, percentYear: 1.6, currBase: { baseDesc: "2024 ממוצע", value: 104.8 }, prevBase: null, month: 6, monthDesc: "יוני" },
+        { year: 2026, percent: -0.3, percentYear: 1.9, currBase: { baseDesc: "2024 ממוצע", value: 104.8 }, prevBase: null, month: 5, monthDesc: "מאי" },
+        { year: 2026, percent: 1.2, percentYear: 1.9, currBase: { baseDesc: "2024 ממוצע", value: 105.1 }, prevBase: null, month: 4, monthDesc: "אפריל" },
+        { year: 2026, percent: 0.4, percentYear: 1.9, currBase: { baseDesc: "2024 ממוצע", value: 103.9 }, prevBase: null, month: 3, monthDesc: "מרס" },
+        { year: 2026, percent: 0.2, percentYear: 2, currBase: { baseDesc: "2024 ממוצע", value: 103.5 }, prevBase: null, month: 2, monthDesc: "פברואר" },
+        { year: 2026, percent: -0.3, percentYear: 1.8, currBase: { baseDesc: "2024 ממוצע", value: 103.3 }, prevBase: null, month: 1, monthDesc: "ינואר" },
+        { year: 2025, percent: 0, percentYear: 2.6, currBase: { baseDesc: "2024 ממוצע", value: 103.6 }, prevBase: null, month: 12, monthDesc: "דצמבר" },
+        { year: 2025, percent: -0.5, percentYear: 2.4, currBase: { baseDesc: "2024 ממוצע", value: 103.6 }, prevBase: null, month: 11, monthDesc: "נובמבר" },
+        { year: 2025, percent: 0.5, percentYear: 2.5, currBase: { baseDesc: "2024 ממוצע", value: 104.1 }, prevBase: null, month: 10, monthDesc: "אוקטובר" },
+        { year: 2025, percent: -0.6, percentYear: 2.5, currBase: { baseDesc: "2024 ממוצע", value: 103.6 }, prevBase: null, month: 9, monthDesc: "ספטמבר" },
+        { year: 2025, percent: 0.7, percentYear: 2.9, currBase: { baseDesc: "2024 ממוצע", value: 104.2 }, prevBase: null, month: 8, monthDesc: "אוגוסט" },
+        { year: 2025, percent: 0.4, percentYear: 3.1, currBase: { baseDesc: "2024 ממוצע", value: 103.5 }, prevBase: null, month: 7, monthDesc: "יולי" },
+      ],
+    },
+  ],
+  quarter: null,
+  paging: { total_items: 13 },
+};
+
+test("אמיתי — התשובה של הלמ״ס מפוענחת ל-12 חודשים בסדר הנכון", () => {
+  const h = buildCpiHistory(REAL_CBS)!;
+  assert.equal(h.length, 12);
+  assert.equal(h[0].value, 105.1);
+  assert.equal(h[0].month, 7);
+  assert.equal(h[0].year, 2026);
+  assert.equal(h[0].monthName, "יולי");
+  assert.equal(h[0].base, "2024 ממוצע");
+  assert.equal(h[11].monthName, "אוגוסט");
+});
+
+test("אמיתי — השינוי החודשי נלקח מהשדה הרשמי של הלמ״ס", () => {
+  const h = buildCpiHistory(REAL_CBS)!;
+  const expected = [0.3, 0, -0.3, 1.2, 0.4, 0.2, -0.3, 0, -0.5, 0.5, -0.6, 0.7];
+  h.forEach((r, i) => {
+    assert.equal(r.changeSource, "official", `${r.year}-${r.month}`);
+    close(r.changePct!, expected[i], 1e-12, `${r.year}-${r.month}`);
+  });
+});
+
+test("אמיתי — החישוב העצמי תואם לנתון הרשמי אחרי עיגול", () => {
+  // אימות הדדי: מה שהיינו מחשבים מהערכים מתעגל לנתון הרשמי
+  const series = parseCpiSeries(REAL_CBS);
+  for (let i = 0; i < series.length - 1; i++) {
+    const computed = monthlyChangePct(series[i].value, series[i + 1].value)!;
+    const official = series[i].changePct!;
+    close(Math.round(computed * 10) / 10, official, 1e-9, `${series[i].year}-${series[i].month}`);
+  }
+});
+
+test("אמיתי — השינוי השנתי נקלט ומוגן מבלבול עם החודשי", () => {
+  const h = buildCpiHistory(REAL_CBS)!;
+  close(h[0].yearPct!, 1.5);
+  close(h[0].changePct!, 0.3);
+  assert.notEqual(h[0].yearPct, h[0].changePct);
+  // אימות משמעות: יולי 2026 מול יולי 2025 → 1.5%
+  close(Math.round(((105.1 / 103.5 - 1) * 100) * 10) / 10, 1.5, 1e-9);
+});
+
+test("אמיתי — היעדר השדה הרשמי מפעיל חישוב עצמי", () => {
+  const noPercent = {
+    month: [{ date: [
+      { year: 2026, month: 7, currBase: { value: 105.1 } },
+      { year: 2026, month: 6, currBase: { value: 104.8 } },
+    ] }],
+  };
+  const h = buildCpiHistory(noPercent)!;
+  assert.equal(h[0].changeSource, "computed");
+  close(h[0].changePct!, ((105.1 / 104.8) - 1) * 100);
+});

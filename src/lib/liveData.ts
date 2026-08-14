@@ -22,10 +22,15 @@ export interface CpiReading {
   base?: string;
   /**
    * שיעור השינוי מול המדד הקודם שפורסם, באחוזים.
-   * מחושב מתוך הערכים עצמם — לא מול מדד הבסיס.
-   * undefined כאשר אין רשומה קודמת להשוואה.
+   * מקור: שדה percent הרשמי של הלמ״ס כאשר הוא קיים; אחרת מחושב
+   * מהערכים עצמם. בשני המקרים ההשוואה היא מול החודש הקודם ולא
+   * מול מדד הבסיס. undefined כשאין מול מה להשוות.
    */
   changePct?: number;
+  /** מקור השינוי — לצורך שקיפות ובדיקות */
+  changeSource?: "official" | "computed";
+  /** שיעור השינוי השנתי הרשמי (percentYear) — אינפלציה ב-12 החודשים */
+  yearPct?: number;
 }
 
 /** מספר החודשים שמוצגים בהיסטוריה */
@@ -40,8 +45,10 @@ export const CPI_FETCH_RECORDS = CPI_HISTORY_MONTHS + 1;
 export interface BoiReading {
   /** ריבית בנק ישראל באחוזים */
   rate: number;
-  /** תאריך התחולה, אם נמסר (ISO או טקסט) */
+  /** תאריך התחולה או הפרסום, אם נמסר (ISO או טקסט) */
   effectiveDate?: string;
+  /** מועד החלטת הריבית הבאה, כפי שמוסר בנק ישראל */
+  nextDecisionDate?: string;
   /**
    * השינוי מול הקריאה הקודמת — ב**נקודות אחוז**, לא באחוזים.
    * מעבר מ-4.5% ל-4.25% הוא ‎-0.25 נקודות אחוז.
@@ -158,8 +165,23 @@ export function parseCpiSeries(payload: Json): CpiReading[] {
     const nameRaw = pick(node, ["monthDesc", "monthName", "name"]);
     const monthName = typeof nameRaw === "string" ? nameRaw : undefined;
 
+    // שדות רשמיים של הלמ״ס: percent = שינוי מהחודש הקודם,
+    // percentYear = שינוי מהחודש המקביל אשתקד. שניהם אומתו מול
+    // הערכים עצמם בתשובה אמיתית ולכן מועדפים על חישוב עצמי.
+    const official = toNumber(pick(node, ["percent"]));
+    const yearly = toNumber(pick(node, ["percentYear"]));
+
     const key = `${year}-${month}`;
-    if (!byMonth.has(key)) byMonth.set(key, { value, year, month, monthName, base });
+    if (!byMonth.has(key))
+      byMonth.set(key, {
+        value,
+        year,
+        month,
+        monthName,
+        base,
+        ...(official !== null ? { changePct: official, changeSource: "official" as const } : {}),
+        ...(yearly !== null ? { yearPct: yearly } : {}),
+      });
   }
 
   return Array.from(byMonth.values()).sort(
@@ -194,9 +216,13 @@ export function monthlyChangePct(current: number, previous: number): number | nu
  */
 export function withMonthlyChange(series: CpiReading[]): CpiReading[] {
   return series.map((r, i) => {
+    // הנתון הרשמי גובר; החישוב משמש רק כשהוא חסר
+    if (r.changeSource === "official") return { ...r };
     const prev = series[i + 1];
     const changePct = prev ? monthlyChangePct(r.value, prev.value) : null;
-    return changePct === null ? { ...r } : { ...r, changePct };
+    return changePct === null
+      ? { ...r }
+      : { ...r, changePct, changeSource: "computed" as const };
   });
 }
 
@@ -375,9 +401,11 @@ export function parseBoi(payload: Json): BoiReading | null {
     "value",
     "obsValue",
   ];
+  // שמות השדות בפועל ב-PublicApi של בנק ישראל, לפי תשובה אמיתית
   const DATE_KEYS = [
     "effectiveDate",
     "EffectiveDate",
+    "lastPublishedDate",
     "startDate",
     "date",
     "Date",
@@ -400,7 +428,11 @@ export function parseBoi(payload: Json): BoiReading | null {
       const d = pick(node, DATE_KEYS);
       if (typeof d === "string" && d.length >= 4) effectiveDate = d;
 
-      return { rate, effectiveDate };
+      let nextDecisionDate: string | undefined;
+      const nd = pick(node, ["nextInterestDate", "nextDecisionDate"]);
+      if (typeof nd === "string" && nd.length >= 4) nextDecisionDate = nd;
+
+      return { rate, effectiveDate, nextDecisionDate };
     }
   }
 

@@ -83,12 +83,13 @@ export function CpiChartPanel({ history }: { history: CpiReading[] }) {
 export function CpiHistoryTable({ history }: { history: CpiReading[] }) {
   return (
     <div className="table-wrap">
-      <table className="schedule cpi-table">
+      <table className="schedule cpi-table boi-table">
         <thead>
           <tr>
             <th>חודש</th>
             <th>ערך המדד</th>
             <th>שינוי חודשי</th>
+            <th>שינוי שנתי</th>
           </tr>
         </thead>
         <tbody>
@@ -101,6 +102,13 @@ export function CpiHistoryTable({ history }: { history: CpiReading[] }) {
                   <span className="cpi-na">—</span>
                 ) : (
                   <ChangeMark pct={r.changePct} />
+                )}
+              </td>
+              <td>
+                {r.yearPct === undefined ? (
+                  <span className="cpi-na">—</span>
+                ) : (
+                  `${fmtNum(round2(r.yearPct))}%`
                 )}
               </td>
             </tr>

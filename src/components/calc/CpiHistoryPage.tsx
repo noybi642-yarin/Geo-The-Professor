@@ -87,7 +87,12 @@ export default function CpiHistoryPage() {
                 <b>
                   {latest!.monthName || hebrewMonth(latest!.month)} {latest!.year}
                 </b>
-                {latest!.base && <span className="cpi-summary-base">{latest!.base}</span>}
+                {latest!.yearPct !== undefined && (
+                  <span className="cpi-summary-base">
+                    שינוי שנתי: {fmtNum(round2(latest!.yearPct))}%
+                  </span>
+                )}
+                {latest!.base && <span className="cpi-summary-base">בסיס: {latest!.base}</span>}
               </div>
             </section>
 
@@ -102,8 +107,8 @@ export default function CpiHistoryPage() {
               <h2 className="panel-title">פירוט חודשי</h2>
               <CpiHistoryTable history={history} />
               <div className="cpi-foot">
-                השינוי מחושב מול המדד הקודם שפורסם, לא מול מדד הבסיס. מקור: הלשכה המרכזית
-                לסטטיסטיקה.
+                השינוי החודשי מול המדד הקודם שפורסם, לא מול מדד הבסיס. השינוי השנתי מול
+                החודש המקביל אשתקד. מקור: הלשכה המרכזית לסטטיסטיקה.
                 {savedAt ? ` · עודכן: ${fmtStamp(savedAt)}` : ""}
               </div>
             </section>
