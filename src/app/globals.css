@@ -1441,6 +1441,166 @@ input {
   color: var(--text-3);
 }
 
+/* ─── מדד: שינוי חודשי והיסטוריה ─────────────────────────────── */
+
+.live-item-btn {
+  text-align: start;
+  cursor: pointer;
+  transition: border-color 0.16s ease, transform 0.16s ease;
+}
+
+.live-item-btn:hover {
+  border-color: var(--accent);
+}
+
+.live-item-btn:active {
+  transform: scale(0.985);
+}
+
+.live-item-btn .live-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.live-more {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.cpi-change {
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cpi-up {
+  color: #b42318;
+}
+
+.cpi-down {
+  color: var(--success);
+}
+
+.cpi-flat {
+  color: var(--text-3);
+}
+
+.cpi-na {
+  color: var(--text-3);
+}
+
+/* ─── גרף המדד ──────────────────────────────────────────────── */
+
+.cpi-chart-wrap {
+  background: var(--input-bg);
+  border: 1.5px solid var(--line);
+  border-radius: 15px;
+  padding: 10px 8px 6px;
+  margin-bottom: 16px;
+}
+
+.cpi-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: pan-y;
+}
+
+.cpi-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.cpi-axis {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.cpi-cross {
+  stroke: var(--accent);
+  stroke-width: 1;
+  opacity: 0.45;
+}
+
+.cpi-dot {
+  fill: var(--accent);
+  transition: r 0.12s ease;
+}
+
+.cpi-dot.on {
+  stroke: var(--card);
+  stroke-width: 2;
+}
+
+.cpi-tick {
+  fill: var(--text-3);
+  font-size: 9px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: plaintext;
+}
+
+.cpi-chart rect[tabindex]:focus {
+  outline: none;
+}
+
+.cpi-chart rect[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.cpi-readout {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  min-height: 26px;
+  padding: 4px 6px 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.cpi-readout b {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--accent-dark);
+}
+
+.cpi-readout-hint {
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+/* 3 עמודות בלבד — נכנסות במובייל בלי גלילה אופקית */
+.cpi-table {
+  min-width: 0;
+}
+
+.cpi-table td:first-child {
+  text-align: start;
+  font-weight: 600;
+}
+
+.cpi-table th,
+.cpi-table td {
+  padding: 10px 10px;
+}
+
+.cpi-foot {
+  margin-top: 14px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-3);
+}
+
 /* ─── כותרת אזור במסך הבית ──────────────────────────────────── */
 
 .section-head {

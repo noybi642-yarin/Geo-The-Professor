@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import {
+  buildCpiHistory,
   calcPrime,
+  CPI_FETCH_RECORDS,
   parseBoi,
-  parseCpi,
   type BoiReading,
   type CpiReading,
   type LiveData,
@@ -14,10 +15,12 @@ export const runtime = "nodejs";
 export const revalidate = 3600;
 
 /** מקורות רשמיים בלבד — ללא scraping וללא מנועי חיפוש */
+// קריאה אחת מחזירה את כל ההיסטוריה הדרושה — אין קריאה לכל חודש.
+// last=13 כדי שגם לחודש ה-12 המוצג יהיה מול מה לחשב שינוי.
 const CPI_ENDPOINTS = [
-  "https://api.cbs.gov.il/index/data/price?id=120010&format=json&download=false&last=2",
+  `https://api.cbs.gov.il/index/data/price?id=120010&format=json&download=false&last=${CPI_FETCH_RECORDS}`,
   "https://api.cbs.gov.il/index/data/price?id=120010&format=json&download=false",
-  "https://api.cbs.gov.il/index/data/price_selected?id=120010&format=json&download=false&last=2",
+  `https://api.cbs.gov.il/index/data/price_selected?id=120010&format=json&download=false&last=${CPI_FETCH_RECORDS}`,
 ];
 
 const BOI_ENDPOINTS = [
@@ -95,12 +98,16 @@ export async function GET(request: Request) {
   const debug = new URL(request.url).searchParams.get("debug") === "1";
 
   const [cpiRes, boiRes] = await Promise.all([
-    resolve<CpiReading>(CPI_ENDPOINTS, parseCpi),
+    // הסדרה נפתרת בבת אחת: הקריאה העדכנית היא האיבר הראשון בה
+    resolve<CpiReading[]>(CPI_ENDPOINTS, (json) => buildCpiHistory(json)),
     resolve<BoiReading>(BOI_ENDPOINTS, parseBoi),
   ]);
 
+  const history = cpiRes.value;
+  const latest = history?.[0] ?? null;
+
   const errors: LiveData["errors"] = [];
-  if (!cpiRes.value)
+  if (!latest)
     errors.push({
       source: "cpi",
       message: cpiRes.attempts.map((a) => a.error).filter(Boolean).join(" · ") || "לא זמין",
@@ -112,7 +119,9 @@ export async function GET(request: Request) {
     });
 
   const data: LiveData = {
-    cpi: cpiRes.value,
+    cpi: latest,
+    // כשל בהיסטוריה אינו פוגע במדד הנוכחי, בריבית בנק ישראל או בפריים
+    cpiHistory: history && history.length > 1 ? history : null,
     boi: boiRes.value,
     prime: calcPrime(boiRes.value?.rate),
     fetchedAt: new Date().toISOString(),
