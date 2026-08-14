@@ -63,6 +63,14 @@ export const BOI_HISTORY_MONTHS = 12;
 /** תקופה נוספת מעבר לתצוגה, לחישוב השינוי של הישנה ביותר */
 export const BOI_FETCH_RECORDS = BOI_HISTORY_MONTHS + 1;
 
+/**
+ * כמה תצפיות למשוך מסדרת הריבית.
+ * תדירות הסדרה אינה ידועה מראש, ואם היא יומית אז 13 תצפיות הן
+ * פחות מחודש. 420 מכסות 13 חודשי לוח מלאים גם בתדירות יומית,
+ * ואם הסדרה חודשית זה פשוט טווח ארוך יותר שנחתך ממילא.
+ */
+export const BOI_FETCH_OBSERVATIONS = 420;
+
 export interface LiveData {
   cpi: CpiReading | null;
   /**
@@ -384,20 +392,44 @@ const POLICY_RATE_TOKENS = [
   "monetary rate",
 ];
 
+const same = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+
 /**
  * בוחר את סדרת ריבית המדיניות מתוך התשובה.
- * כשיש סדרה אחת — היא הסדרה. כשיש כמה, נבחרת רק זו שתוויתה מזהה
- * אותה במפורש; אם אי אפשר להכריע מחזירים null במקום לנחש, כדי
- * שלא תוצג סדרה אחרת כאילו היא ריבית בנק ישראל.
+ *
+ * knownRate היא הריבית הנוכחית שכבר התקבלה מ-PublicApi. כשהיא
+ * ידועה אפשר לצמצם לסדרה שהתצפית האחרונה שלה מסכימה איתה — זהו
+ * אימות מול מקור רשמי שני, לא ניחוש.
+ *
+ * אחריה מנסים זיהוי לפי התווית. אם כל מה שנותר מסכים על אותה
+ * ריבית נוכחית, אין על מה להתלבט — זו אותה ריבית בתדירויות שונות.
+ * כשנשארה אי-בהירות אמיתית מוחזר null במקום סדרה שאולי שגויה.
  */
-export function pickPolicyRateSeries(list: SdmxSeries[]): SdmxSeries | null {
+export function pickPolicyRateSeries(
+  list: SdmxSeries[],
+  knownRate?: number
+): SdmxSeries | null {
   if (list.length === 0) return null;
   if (list.length === 1) return list[0];
-  const matches = list.filter((s) => {
+
+  let pool = list;
+  if (knownRate !== undefined && Number.isFinite(knownRate)) {
+    const verified = list.filter((s) => s.readings[0] && same(s.readings[0].rate, knownRate));
+    if (verified.length === 1) return verified[0];
+    if (verified.length > 1) pool = verified;
+  }
+
+  const matches = pool.filter((s) => {
     const l = s.label.toLowerCase();
     return POLICY_RATE_TOKENS.some((t) => l.includes(t));
   });
-  return matches.length === 1 ? matches[0] : null;
+  if (matches.length === 1) return matches[0];
+
+  const head = pool[0]?.readings[0]?.rate;
+  if (head !== undefined && pool.every((s) => s.readings[0] && same(s.readings[0].rate, head))) {
+    return pool[0];
+  }
+  return null;
 }
 
 /** פענוח תשובת SDMX (edge.boi.gov.il) — התצפית האחרונה בסדרה */
@@ -408,9 +440,34 @@ function parseSdmxRate(payload: Json): BoiReading | null {
   return { rate: latest.rate, effectiveDate: latest.effectiveDate };
 }
 
-function parseSdmxSeries(payload: Json): BoiReading[] {
-  const chosen = pickPolicyRateSeries(sdmxSeriesList(payload));
+function parseSdmxSeries(payload: Json, knownRate?: number): BoiReading[] {
+  const chosen = pickPolicyRateSeries(sdmxSeriesList(payload), knownRate);
   return chosen ? chosen.readings : [];
+}
+
+/** מפתח החודש מתוך תווית התקופה, כשהיא בצורת YYYY-MM */
+function monthKey(d?: string): string | null {
+  const m = /^(\d{4})-(\d{2})/.exec(d ?? "");
+  return m ? `${m[1]}-${m[2]}` : null;
+}
+
+/**
+ * מצמצם את הסדרה לקריאה אחת לחודש — האחרונה שפורסמה בו.
+ * ריבית המדיניות עשויה להתפרסם בתדירות יומית, ואז 12 תצפיות הן
+ * פחות מחצי חודש ואינן היסטוריה. כשלא ניתן לזהות חודש מהתווית,
+ * הסדרה נשארת כמות שהיא ולא ממציאים לה מבנה.
+ */
+function collapseToMonthly(series: BoiReading[]): BoiReading[] {
+  const seen = new Set<string>();
+  const out: BoiReading[] = [];
+  for (const r of series) {
+    const k = monthKey(r.effectiveDate);
+    if (k === null) return series;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(r);
+  }
+  return out;
 }
 
 /**
@@ -438,14 +495,15 @@ export function withRateChange(series: BoiReading[]): BoiReading[] {
  */
 export function buildBoiHistory(
   payload: Json,
-  months = BOI_HISTORY_MONTHS
+  months = BOI_HISTORY_MONTHS,
+  knownRate?: number
 ): BoiReading[] | null {
-  const series = parseSdmxSeries(payload);
+  const series = parseSdmxSeries(payload, knownRate);
   if (series.length === 0) {
     // מקור ללא סדרה (PublicApi) — קריאה בודדת אינה היסטוריה
     return null;
   }
-  return withRateChange(series).slice(0, months);
+  return withRateChange(collapseToMonthly(series)).slice(0, months);
 }
 
 /**
