@@ -3,7 +3,6 @@
 import { useId, useMemo, useState } from "react";
 import { fmtNum, round2 } from "@/lib/finance";
 import { hebrewMonth, type CpiReading } from "@/lib/liveData";
-import { Modal } from "./shared";
 
 const fmtIdx = (v: number) => fmtNum(round2(v));
 
@@ -149,77 +148,66 @@ function CpiChart({
   );
 }
 
-// ─── חלון ההיסטוריה ────────────────────────────────────────────
+// ─── תוכן ההיסטוריה ────────────────────────────────────────────
 
-export default function CpiHistoryModal({
-  history,
-  onClose,
-}: {
-  history: CpiReading[] | null | undefined;
-  onClose: () => void;
-}) {
+/** גרף + קריאה חיה — משמש את עמוד ההיסטוריה */
+export function CpiChartPanel({ history }: { history: CpiReading[] }) {
   const [active, setActive] = useState<number | null>(null);
 
   // הסדרה מגיעה מהחדש לישן; הגרף מוצג מהישן לחדש
-  const chronological = useMemo(() => (history ? [...history].reverse() : []), [history]);
+  const chronological = useMemo(() => [...history].reverse(), [history]);
   const point = active !== null ? chronological[active] : null;
 
   return (
-    <Modal title="📈 היסטוריית מדד המחירים לצרכן" onClose={onClose}>
-      {!history || history.length === 0 ? (
-        <div className="empty-note">היסטוריית המדד אינה זמינה כרגע.</div>
-      ) : (
-        <>
-          <div className="cpi-chart-wrap">
-            <CpiChart data={chronological} active={active} onActive={setActive} />
-            <div className="cpi-readout" role="status">
-              {point ? (
-                <>
-                  <b>{fmtIdx(point.value)}</b>
-                  <span>{monthLabel(point)}</span>
-                  <ChangeMark pct={point.changePct} />
-                </>
-              ) : (
-                <span className="cpi-readout-hint">
-                  העבירי אצבע או סמן על הגרף לפרטי חודש
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="table-wrap">
-            <table className="schedule cpi-table">
-              <thead>
-                <tr>
-                  <th>חודש</th>
-                  <th>ערך המדד</th>
-                  <th>שינוי חודשי</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map((r) => (
-                  <tr key={`${r.year}-${r.month}`}>
-                    <td>{monthLabel(r)}</td>
-                    <td>{fmtIdx(r.value)}</td>
-                    <td>
-                      {r.changePct === undefined ? (
-                        <span className="cpi-na">—</span>
-                      ) : (
-                        <ChangeMark pct={r.changePct} />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="cpi-foot">
-            השינוי מחושב מול המדד הקודם שפורסם, לא מול מדד הבסיס. מקור: הלשכה המרכזית
-            לסטטיסטיקה.
-          </div>
-        </>
-      )}
-    </Modal>
+    <div className="cpi-chart-wrap">
+      <CpiChart data={chronological} active={active} onActive={setActive} />
+      <div className="cpi-readout" role="status">
+        {point ? (
+          <>
+            <b>{fmtIdx(point.value)}</b>
+            <span>{monthLabel(point)}</span>
+            <ChangeMark pct={point.changePct} />
+          </>
+        ) : (
+          <span className="cpi-readout-hint">
+            העבירי אצבע או סמן על הגרף לפרטי חודש
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
+
+/** טבלת 12 החודשים — כל ערך נגיש גם בלי הגרף */
+export function CpiHistoryTable({ history }: { history: CpiReading[] }) {
+  return (
+    <div className="table-wrap">
+      <table className="schedule cpi-table">
+        <thead>
+          <tr>
+            <th>חודש</th>
+            <th>ערך המדד</th>
+            <th>שינוי חודשי</th>
+          </tr>
+        </thead>
+        <tbody>
+          {history.map((r) => (
+            <tr key={`${r.year}-${r.month}`}>
+              <td>{monthLabel(r)}</td>
+              <td>{fmtIdx(r.value)}</td>
+              <td>
+                {r.changePct === undefined ? (
+                  <span className="cpi-na">—</span>
+                ) : (
+                  <ChangeMark pct={r.changePct} />
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export { fmtIdx, monthLabel };

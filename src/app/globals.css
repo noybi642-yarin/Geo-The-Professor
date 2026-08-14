@@ -1494,6 +1494,76 @@ input {
   color: var(--text-3);
 }
 
+/* ─── עמוד היסטוריית המדד ───────────────────────────────────── */
+
+.cpi-page .sn-container {
+  padding-bottom: 40px;
+}
+
+.cpi-page .sn-title {
+  font-size: 25px;
+  line-height: 1.25;
+}
+
+/* קישור בכרטיס — נראה ומתנהג ככרטיס, לא כטקסט */
+a.live-item-btn {
+  text-decoration: none;
+  color: inherit;
+}
+
+.cpi-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.cpi-summary-main {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.cpi-summary-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.cpi-summary-value {
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1.05;
+  color: var(--accent-dark);
+  letter-spacing: -0.5px;
+  unicode-bidi: plaintext;
+}
+
+.cpi-summary-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: end;
+}
+
+.cpi-summary-side b {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.cpi-summary-base {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+@media (max-width: 420px) {
+  .cpi-summary-side {
+    text-align: start;
+  }
+}
+
 /* ─── גרף המדד ──────────────────────────────────────────────── */
 
 .cpi-chart-wrap {
