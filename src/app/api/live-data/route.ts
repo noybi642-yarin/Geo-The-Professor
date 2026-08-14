@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import {
+  BOI_FETCH_RECORDS,
+  buildBoiHistory,
   buildCpiHistory,
   calcPrime,
   CPI_FETCH_RECORDS,
@@ -23,9 +25,11 @@ const CPI_ENDPOINTS = [
   `https://api.cbs.gov.il/index/data/price_selected?id=120010&format=json&download=false&last=${CPI_FETCH_RECORDS}`,
 ];
 
+// הסדרה מספקת גם את הריבית הנוכחית וגם את ההיסטוריה בקריאה אחת;
+// ה-PublicApi נשאר כגיבוי לריבית הנוכחית בלבד (הוא אינו מחזיר סדרה).
 const BOI_ENDPOINTS = [
+  `https://edge.boi.gov.il/FusionEdgeServer/sdmx/v2/data/dataflow/BOI.STATISTICS/RATE_BOI/1.0/all?format=jsondata&lastNObservations=${BOI_FETCH_RECORDS}`,
   "https://boi.org.il/PublicApi/GetInterest",
-  "https://edge.boi.gov.il/FusionEdgeServer/sdmx/v2/data/dataflow/BOI.STATISTICS/RATE_BOI/1.0/all?format=jsondata&lastNObservations=1",
 ];
 
 const TIMEOUT_MS = 9000;
@@ -97,14 +101,17 @@ async function resolve<T>(
 export async function GET(request: Request) {
   const debug = new URL(request.url).searchParams.get("debug") === "1";
 
-  const [cpiRes, boiRes] = await Promise.all([
+  const [cpiRes, boiRes, boiHistRes] = await Promise.all([
     // הסדרה נפתרת בבת אחת: הקריאה העדכנית היא האיבר הראשון בה
     resolve<CpiReading[]>(CPI_ENDPOINTS, (json) => buildCpiHistory(json)),
     resolve<BoiReading>(BOI_ENDPOINTS, parseBoi),
+    // הסדרה נמשכת מאותן כתובות; כשל בה אינו פוגע בריבית הנוכחית
+    resolve<BoiReading[]>(BOI_ENDPOINTS, (json) => buildBoiHistory(json)),
   ]);
 
   const history = cpiRes.value;
   const latest = history?.[0] ?? null;
+  const boiHistory = boiHistRes.value;
 
   const errors: LiveData["errors"] = [];
   if (!latest)
@@ -123,6 +130,8 @@ export async function GET(request: Request) {
     // כשל בהיסטוריה אינו פוגע במדד הנוכחי, בריבית בנק ישראל או בפריים
     cpiHistory: history && history.length > 1 ? history : null,
     boi: boiRes.value,
+    // כשל בהיסטוריה אינו פוגע בריבית הנוכחית או בפריים
+    boiHistory: boiHistory && boiHistory.length > 1 ? boiHistory : null,
     prime: calcPrime(boiRes.value?.rate),
     fetchedAt: new Date().toISOString(),
     errors,
@@ -131,7 +140,14 @@ export async function GET(request: Request) {
   // 200 גם בכשל חלקי — הלקוח מציג את מה שהתקבל ומשלים מהמטמון המקומי
   return NextResponse.json(
     debug
-      ? { ...data, _debug: { cpi: cpiRes.attempts, boi: boiRes.attempts } }
+      ? {
+          ...data,
+          _debug: {
+            cpi: cpiRes.attempts,
+            boi: boiRes.attempts,
+            boiHistory: boiHistRes.attempts,
+          },
+        }
       : data,
     {
       headers: {
