@@ -340,6 +340,39 @@ export function sdmxSeriesList(payload: Json): SdmxSeries[] {
   return out;
 }
 
+/** עולם תוכן בקטלוג של בנק ישראל */
+export interface DataflowInfo {
+  id: string;
+  he?: string;
+  en?: string;
+}
+
+/**
+ * מפרסר את קטלוג עולמות התוכן של בנק ישראל לרשימה קומפקטית.
+ * התשובה הגולמית ארוכה מאוד ונחתכת באבחון; כאן נשמרים רק המזהה
+ * והשמות — מה שדרוש כדי לזהות איזה עולם תוכן מחזיק את הריבית.
+ */
+export function parseDataflowCatalog(payload: Json): DataflowInfo[] {
+  if (!isObj(payload)) return [];
+  const data = isObj(payload.data) ? (payload.data as Record<string, Json>) : payload;
+  const flows = data.dataflows;
+  if (!Array.isArray(flows)) return [];
+  const out: DataflowInfo[] = [];
+  for (const f of flows) {
+    if (!isObj(f) || typeof f.id !== "string") continue;
+    const names = isObj(f.names) ? (f.names as Record<string, Json>) : null;
+    const he = names && typeof names.he === "string" ? names.he : undefined;
+    const en =
+      names && typeof names.en === "string"
+        ? names.en
+        : typeof f.name === "string"
+          ? f.name
+          : undefined;
+    out.push({ id: f.id, he, en });
+  }
+  return out;
+}
+
 /** מילות זיהוי של סדרת ריבית המדיניות, בעברית ובאנגלית */
 const POLICY_RATE_TOKENS = [
   "ריבית בנק ישראל",

@@ -8,6 +8,7 @@ import {
   buildBoiHistory,
   calcPrime,
   parseBoi,
+  parseDataflowCatalog,
   pickPolicyRateSeries,
   rateChangePts,
   sdmxSeriesList,
@@ -266,6 +267,70 @@ test("סדרות — מבנה בצורת structure יחיד נתמך כמו stru
   assert.equal(list.length, 1);
   assert.equal(list[0].label, "ריבית בנק ישראל · חודשי");
   assert.equal(list[0].readings[0].effectiveDate, "2026-06");
+});
+
+// ─── קטלוג עולמות התוכן ────────────────────────────────────────
+
+/** קטע מהתשובה האמיתית של edge.boi.gov.il, כפי שהתקבלה בפרודקשן */
+const REAL_CATALOG = {
+  meta: { id: "IDREF4ed28565", contentLanguages: ["en", "he"] },
+  data: {
+    dataflows: [
+      {
+        id: "ACC",
+        name: "דוחות כספיים - בנק ישראל",
+        names: { he: "דוחות כספיים - בנק ישראל" },
+        version: "1.0",
+        agencyID: "BOI.STATISTICS",
+      },
+      {
+        id: "BBS_99",
+        name: "Monthly Balance Sheets - Banks",
+        names: { he: "מאזן חודשי - בנקים", en: "Monthly Balance Sheets - Banks" },
+        version: "1.0",
+        agencyID: "BOI.STATISTICS",
+      },
+      {
+        id: "BIR",
+        name: "Interest rates and business volume - exc. housing loans",
+        names: {
+          he: "ריביות וביצועים - לא לדיור",
+          en: "Interest rates and business volume - exc. housing loans",
+        },
+        version: "1.0",
+        agencyID: "BOI.STATISTICS",
+      },
+    ],
+  },
+};
+
+test("קטלוג — מזהה ושמות בעברית ובאנגלית מכל עולם תוכן", () => {
+  const flows = parseDataflowCatalog(REAL_CATALOG);
+  assert.equal(flows.length, 3);
+  assert.deepEqual(flows.map((f) => f.id), ["ACC", "BBS_99", "BIR"]);
+  assert.equal(flows[2].he, "ריביות וביצועים - לא לדיור");
+  assert.equal(flows[2].en, "Interest rates and business volume - exc. housing loans");
+});
+
+test("קטלוג — כשאין שם באנגלית נלקח שדה name", () => {
+  const flows = parseDataflowCatalog(REAL_CATALOG);
+  assert.equal(flows[0].he, "דוחות כספיים - בנק ישראל");
+  assert.equal(flows[0].en, "דוחות כספיים - בנק ישראל", "name משמש כגיבוי");
+});
+
+test("קטלוג — BIR אינו ריבית בנק ישראל אלא ריביות הבנקים", () => {
+  // הממצא שבגללו BIR הוסר מרשימת המקורות: השם מעיד על ריביות
+  // האשראי של הבנקים המסחריים, לא על ריבית המדיניות
+  const bir = parseDataflowCatalog(REAL_CATALOG).find((f) => f.id === "BIR")!;
+  assert.ok(!/ריבית בנק ישראל/.test(bir.he ?? ""));
+  assert.ok(/business volume/i.test(bir.en ?? ""));
+});
+
+test("קטלוג — תשובה שאינה קטלוג מחזירה רשימה ריקה", () => {
+  assert.deepEqual(parseDataflowCatalog(null), []);
+  assert.deepEqual(parseDataflowCatalog({}), []);
+  assert.deepEqual(parseDataflowCatalog({ data: {} }), []);
+  assert.deepEqual(parseDataflowCatalog({ data: { dataflows: "x" } }), []);
 });
 
 // ─── בידוד כשלים ───────────────────────────────────────────────

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import {
-  BOI_FETCH_RECORDS,
   buildBoiHistory,
   buildCpiHistory,
   calcPrime,
   CPI_FETCH_RECORDS,
   parseBoi,
+  parseDataflowCatalog,
   sdmxSeriesList,
   type BoiReading,
   type CpiReading,
@@ -27,33 +27,39 @@ const CPI_ENDPOINTS = [
 ];
 
 // ה-PublicApi מאומת ומחזיר את הריבית הנוכחית, אך ללא סדרה
-// היסטורית. הכתובות שאחריו הן מועמדות להיסטוריה בלבד — הן נוסות
-// בסדר הזה, וכל כשל שלהן אינו פוגע בריבית הנוכחית.
-// ⚠️ BOI.STATISTICS/RATE_BOI החזיר 404 בפועל — ה-dataflow הזה
-// אינו קיים. לפי מדריך השליפה של בנק ישראל מזהה עולם התוכן של
-// הריבית הוא BIR, ולכן זה מה שנוסה כאן, בשני נתיבי ה-API של
-// FusionEdge: נתיב SDMX v2 ונתיב ws/public בתחביר SDMX 2.1.
+// היסטורית. הכתובת הנכונה להיסטוריה טרם אותרה, וכל עוד היא לא
+// אותרה מוטב בלי היסטוריה מאשר עם מספר שאינו ריבית בנק ישראל.
+//
+// מה שנשלל עד כה, לפי תשובות אמיתיות מהפרודקשן:
+// · BOI.STATISTICS/RATE_BOI — 404, ה-dataflow אינו קיים
+// · BOI.STATISTICS/BIR — קיים, אבל הוא ״ריביות וביצועים - לא
+//   לדיור״: ריביות האשראי של הבנקים המסחריים, לא ריבית המדיניות
 const EDGE = "https://edge.boi.gov.il/FusionEdgeServer";
-const BOI_ENDPOINTS = [
-  "https://boi.org.il/PublicApi/GetInterest",
-  `${EDGE}/sdmx/v2/data/dataflow/BOI.STATISTICS/BIR/1.0/all?format=jsondata&lastNObservations=${BOI_FETCH_RECORDS}`,
-  `${EDGE}/ws/public/sdmxapi/rest/data/BOI.STATISTICS,BIR,1.0/all?format=jsondata&lastNObservations=${BOI_FETCH_RECORDS}`,
-];
+const BOI_ENDPOINTS = ["https://boi.org.il/PublicApi/GetInterest"];
 
 /**
- * בדיקות אבחון בלבד — נמשכות רק כאשר ?debug=1, ולעולם אינן
- * משמשות להצגת נתון. מטרתן לגלות אילו עולמות תוכן קיימים בפועל
- * ומהו מבנה סדרת הריבית, במקום לנחש כתובות אחת אחרי השנייה.
+ * קטלוג עולמות התוכן של בנק ישראל — נמשך רק במצב אבחון.
+ * התשובה הגולמית ארוכה מכדי להיחתך בצורה שימושית, ולכן היא
+ * מפורסרת לרשימת מזהים ושמות.
+ */
+const BOI_CATALOG_URL = `${EDGE}/ws/public/sdmxapi/rest/dataflow/BOI.STATISTICS/all/latest?format=sdmx-json&detail=allstubs`;
+
+/**
+ * ניסויי צורת כתובת — אבחון בלבד, לעולם לא מזינים נתון מוצג.
+ * נתיב המבנה מחזיר 200 בעוד נתיב הנתונים מחזיר 404, ולכן כאן
+ * נבדקות צורות שונות של נתיב הנתונים מול BIR — עולם תוכן שידוע
+ * שקיים. מה שמעניין הוא הסטטוס, לא התוכן.
  */
 const BOI_PROBE_ENDPOINTS = [
-  `${EDGE}/ws/public/sdmxapi/rest/dataflow/BOI.STATISTICS/all/latest?format=sdmx-json&detail=allstubs`,
-  `${EDGE}/sdmx/v2/structure/dataflow/BOI.STATISTICS/*/+?format=sdmx-json&detail=allstubs`,
-  `${EDGE}/ws/public/sdmxapi/rest/schema/dataflow/BOI.STATISTICS/BIR/1.0?format=sdmx-2.1`,
+  `${EDGE}/ws/public/sdmxapi/rest/data/BOI.STATISTICS,BIR,1.0/all/all?lastNObservations=1&format=jsondata`,
+  `${EDGE}/ws/public/sdmxapi/rest/data/BIR?lastNObservations=1&format=jsondata`,
+  `${EDGE}/sdmx/v2/data/dataflow/BOI.STATISTICS/BIR/1.0?lastNObservations=1&format=sdmx-json`,
+  `${EDGE}/sdmx/v2/data/dataflow/BOI.STATISTICS/BIR/1.0/*?lastNObservations=1&format=sdmx-json`,
 ];
 
 const TIMEOUT_MS = 9000;
-/** גוף תשובת אבחון נחתך — אין צורך במבנה המלא כדי לזהות מזהים */
-const PROBE_BODY_CHARS = 4000;
+/** גוף תשובת אבחון נחתך — הסטטוס הוא מה שמעניין, לא המבנה המלא */
+const PROBE_BODY_CHARS = 700;
 
 interface Attempt {
   url: string;
@@ -242,7 +248,16 @@ export async function GET(request: Request) {
   };
 
   // בדיקות האבחון נמשכות רק במצב debug, ולעולם אינן מזינות נתון מוצג
-  const probes = debug ? await Promise.all(BOI_PROBE_ENDPOINTS.map(probe)) : [];
+  const [probes, catalog] = debug
+    ? await Promise.all([
+        Promise.all(BOI_PROBE_ENDPOINTS.map(probe)),
+        fetchJson(BOI_CATALOG_URL, 8000).then(({ json, attempt }) => ({
+          status: attempt.status,
+          error: attempt.error,
+          flows: parseDataflowCatalog(json as Parameters<typeof parseDataflowCatalog>[0]),
+        })),
+      ])
+    : [[], null];
 
   // 200 גם בכשל חלקי — הלקוח מציג את מה שהתקבל ומשלים מהמטמון המקומי
   return NextResponse.json(
@@ -253,6 +268,7 @@ export async function GET(request: Request) {
             cpi: cpiRes.attempts,
             boi: boiRes.attempts,
             boiSeries: boiRes.series,
+            boiCatalog: catalog,
             boiProbes: probes,
           },
         }
