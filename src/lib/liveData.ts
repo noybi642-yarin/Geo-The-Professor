@@ -242,110 +242,142 @@ export function buildCpiHistory(
 
 // ─── פענוח ריבית בנק ישראל ─────────────────────────────────────
 
-/** פענוח תשובת SDMX (edge.boi.gov.il) — התצפית האחרונה בסדרה */
-function parseSdmxRate(payload: Json): BoiReading | null {
-  if (!isObj(payload)) return null;
-  const data = isObj(payload.data) ? payload.data : payload;
-  const dataSets = (data as Record<string, Json>).dataSets;
-  if (!Array.isArray(dataSets) || dataSets.length === 0) return null;
+/** סדרה בודדת בתוך תשובת SDMX, עם התווית שמזהה אותה */
+export interface SdmxSeries {
+  /** מפתח הסדרה כפי שהוא בתשובה, למשל "0:0:0" */
+  key: string;
+  /** שמות ערכי המימדים של הסדרה — מה שמאפשר לזהות אותה */
+  label: string;
+  /** התצפיות, מהחדשה לישנה */
+  readings: BoiReading[];
+}
 
-  const first = dataSets[0];
-  if (!isObj(first)) return null;
-  const series = first.series;
-  if (!isObj(series)) return null;
+/** מאתר את בלוק המבנה, בין אם הוא structures[] ובין אם structure */
+function sdmxStructure(data: Record<string, Json>): Record<string, Json> | null {
+  const structures = data.structures;
+  if (Array.isArray(structures) && isObj(structures[0])) return structures[0];
+  if (isObj(data.structure)) return data.structure;
+  return null;
+}
 
-  // תוויות התקופות מתוך מבנה המימדים
-  let periods: string[] = [];
-  const structures = (data as Record<string, Json>).structures;
-  const struct = Array.isArray(structures) ? structures[0] : undefined;
-  if (isObj(struct) && isObj(struct.dimensions)) {
-    const obsDims = (struct.dimensions as Record<string, Json>).observation;
-    if (Array.isArray(obsDims) && isObj(obsDims[0])) {
-      const vals = (obsDims[0] as Record<string, Json>).values;
-      if (Array.isArray(vals)) {
-        periods = vals.map((v) => {
-          if (!isObj(v)) return "";
-          const id = pick(v, ["id", "name", "start"]);
-          return typeof id === "string" ? id : "";
-        });
-      }
-    }
-  }
-
-  let bestIdx = -1;
-  let rate: number | null = null;
-
-  for (const key of Object.keys(series)) {
-    const s = series[key];
-    if (!isObj(s) || !isObj(s.observations)) continue;
-    const obs = s.observations as Record<string, Json>;
-    for (const oKey of Object.keys(obs)) {
-      const idx = parseInt(oKey, 10);
-      const arr = obs[oKey];
-      const v = Array.isArray(arr) ? toNumber(arr[0]) : toNumber(arr);
-      if (v === null || !Number.isFinite(idx)) continue;
-      if (idx > bestIdx) {
-        bestIdx = idx;
-        rate = v;
-      }
-    }
-  }
-
-  if (rate === null) return null;
-  return { rate, effectiveDate: periods[bestIdx] || undefined };
+/** תוויות התקופות לפי סדר התצפיות */
+function sdmxPeriods(struct: Record<string, Json> | null): string[] {
+  if (!struct || !isObj(struct.dimensions)) return [];
+  const obsDims = (struct.dimensions as Record<string, Json>).observation;
+  if (!Array.isArray(obsDims) || !isObj(obsDims[0])) return [];
+  const vals = (obsDims[0] as Record<string, Json>).values;
+  if (!Array.isArray(vals)) return [];
+  return vals.map((v) => {
+    if (!isObj(v)) return "";
+    const id = pick(v, ["id", "name", "start"]);
+    return typeof id === "string" ? id : "";
+  });
 }
 
 /**
- * כל התצפיות בסדרת SDMX, מהחדשה לישנה.
- * ריבית בנק ישראל אינה מתפרסמת כערך חודשי חדש בכל חודש אלא משתנה
- * רק בהחלטת ועדה — ולכן הסדרה עשויה להכיל ערכים חוזרים, וזה תקין.
+ * תווית לכל סדרה: מפתח הסדרה הוא רשימת אינדקסים אל ערכי מימדי
+ * הסדרה, ולכן אפשר לתרגם "0:2:1" לשמות הקודים שמאחוריו.
  */
-function parseSdmxSeries(payload: Json): BoiReading[] {
+function sdmxSeriesLabel(struct: Record<string, Json> | null, key: string): string {
+  if (!struct || !isObj(struct.dimensions)) return "";
+  const dims = (struct.dimensions as Record<string, Json>).series;
+  if (!Array.isArray(dims)) return "";
+  const parts: string[] = [];
+  key.split(":").forEach((raw, di) => {
+    const idx = parseInt(raw, 10);
+    const dim = dims[di];
+    if (!Number.isFinite(idx) || !isObj(dim)) return;
+    const vals = dim.values;
+    if (!Array.isArray(vals) || !isObj(vals[idx])) return;
+    const name = pick(vals[idx] as Record<string, Json>, ["name", "id"]);
+    if (typeof name === "string" && name) parts.push(name);
+  });
+  return parts.join(" · ");
+}
+
+/**
+ * כל הסדרות בתשובת SDMX, כל אחת עם תוויתה ותצפיותיה מהחדשה לישנה.
+ * ריבית בנק ישראל אינה מתפרסמת כערך חדש בכל חודש אלא משתנה רק
+ * בהחלטת ועדה — ולכן סדרה עשויה להכיל ערכים חוזרים, וזה תקין.
+ */
+export function sdmxSeriesList(payload: Json): SdmxSeries[] {
   if (!isObj(payload)) return [];
-  const data = isObj(payload.data) ? payload.data : payload;
-  const dataSets = (data as Record<string, Json>).dataSets;
+  const data = isObj(payload.data) ? (payload.data as Record<string, Json>) : payload;
+  const dataSets = data.dataSets;
   if (!Array.isArray(dataSets) || dataSets.length === 0) return [];
   const first = dataSets[0];
   if (!isObj(first) || !isObj(first.series)) return [];
 
-  let periods: string[] = [];
-  const structures = (data as Record<string, Json>).structures;
-  const struct = Array.isArray(structures) ? structures[0] : undefined;
-  if (isObj(struct) && isObj(struct.dimensions)) {
-    const obsDims = (struct.dimensions as Record<string, Json>).observation;
-    if (Array.isArray(obsDims) && isObj(obsDims[0])) {
-      const vals = (obsDims[0] as Record<string, Json>).values;
-      if (Array.isArray(vals)) {
-        periods = vals.map((v) => {
-          if (!isObj(v)) return "";
-          const id = pick(v, ["id", "name", "start"]);
-          return typeof id === "string" ? id : "";
-        });
-      }
-    }
-  }
-
-  const byIdx = new Map<number, BoiReading>();
+  const struct = sdmxStructure(data);
+  const periods = sdmxPeriods(struct);
   const series = first.series as Record<string, Json>;
+  const out: SdmxSeries[] = [];
+
   for (const key of Object.keys(series)) {
     const sObj = series[key];
     if (!isObj(sObj) || !isObj(sObj.observations)) continue;
     const obs = sObj.observations as Record<string, Json>;
+    const byIdx = new Map<number, BoiReading>();
     for (const oKey of Object.keys(obs)) {
       const idx = parseInt(oKey, 10);
       if (!Number.isFinite(idx)) continue;
       const arr = obs[oKey];
       const v = Array.isArray(arr) ? toNumber(arr[0]) : toNumber(arr);
+      // ריבית מדיניות סבירה — ערך מחוץ לטווח אינו ריבית ונפסל
       if (v === null || v < -5 || v > 40) continue;
-      if (!byIdx.has(idx)) {
-        byIdx.set(idx, { rate: v, effectiveDate: periods[idx] || undefined });
-      }
+      byIdx.set(idx, { rate: v, effectiveDate: periods[idx] || undefined });
     }
+    if (byIdx.size === 0) continue;
+    out.push({
+      key,
+      label: sdmxSeriesLabel(struct, key),
+      readings: Array.from(byIdx.entries())
+        .sort((a, b) => b[0] - a[0])
+        .map(([, r]) => r),
+    });
   }
 
-  return Array.from(byIdx.entries())
-    .sort((a, b) => b[0] - a[0])
-    .map(([, r]) => r);
+  return out;
+}
+
+/** מילות זיהוי של סדרת ריבית המדיניות, בעברית ובאנגלית */
+const POLICY_RATE_TOKENS = [
+  "ריבית בנק ישראל",
+  "ריבית מוניטרית",
+  "ריבית המדיניות",
+  "bank of israel interest",
+  "boi interest",
+  "policy rate",
+  "monetary rate",
+];
+
+/**
+ * בוחר את סדרת ריבית המדיניות מתוך התשובה.
+ * כשיש סדרה אחת — היא הסדרה. כשיש כמה, נבחרת רק זו שתוויתה מזהה
+ * אותה במפורש; אם אי אפשר להכריע מחזירים null במקום לנחש, כדי
+ * שלא תוצג סדרה אחרת כאילו היא ריבית בנק ישראל.
+ */
+export function pickPolicyRateSeries(list: SdmxSeries[]): SdmxSeries | null {
+  if (list.length === 0) return null;
+  if (list.length === 1) return list[0];
+  const matches = list.filter((s) => {
+    const l = s.label.toLowerCase();
+    return POLICY_RATE_TOKENS.some((t) => l.includes(t));
+  });
+  return matches.length === 1 ? matches[0] : null;
+}
+
+/** פענוח תשובת SDMX (edge.boi.gov.il) — התצפית האחרונה בסדרה */
+function parseSdmxRate(payload: Json): BoiReading | null {
+  const chosen = pickPolicyRateSeries(sdmxSeriesList(payload));
+  if (!chosen || chosen.readings.length === 0) return null;
+  const latest = chosen.readings[0];
+  return { rate: latest.rate, effectiveDate: latest.effectiveDate };
+}
+
+function parseSdmxSeries(payload: Json): BoiReading[] {
+  const chosen = pickPolicyRateSeries(sdmxSeriesList(payload));
+  return chosen ? chosen.readings : [];
 }
 
 /**
