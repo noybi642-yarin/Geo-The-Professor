@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import {
+  BOI_FETCH_OBSERVATIONS,
+  BOI_HISTORY_MONTHS,
   buildBoiHistory,
   buildCpiHistory,
   calcPrime,
@@ -26,16 +28,21 @@ const CPI_ENDPOINTS = [
   `https://api.cbs.gov.il/index/data/price_selected?id=120010&format=json&download=false&last=${CPI_FETCH_RECORDS}`,
 ];
 
-// ה-PublicApi מאומת ומחזיר את הריבית הנוכחית, אך ללא סדרה
-// היסטורית. הכתובת הנכונה להיסטוריה טרם אותרה, וכל עוד היא לא
-// אותרה מוטב בלי היסטוריה מאשר עם מספר שאינו ריבית בנק ישראל.
+// ה-PublicApi מאומת ומחזיר את הריבית הנוכחית; אחריו עולם התוכן
+// BR — ״ריבית בנק ישראל״ — לסדרה ההיסטורית. כשל בשני אינו נוגע
+// בראשון.
 //
-// מה שנשלל עד כה, לפי תשובות אמיתיות מהפרודקשן:
-// · BOI.STATISTICS/RATE_BOI — 404, ה-dataflow אינו קיים
-// · BOI.STATISTICS/BIR — קיים, אבל הוא ״ריביות וביצועים - לא
-//   לדיור״: ריביות האשראי של הבנקים המסחריים, לא ריבית המדיניות
+// שתי טעויות קודמות, שנשללו מול תשובות אמיתיות מהפרודקשן:
+// · עולם התוכן: RATE_BOI אינו קיים כלל, ו-BIR הוא ״ריביות
+//   וביצועים - לא לדיור״ — ריביות האשראי של הבנקים המסחריים.
+//   הנכון הוא BR, לפי הקטלוג של edge.boi.gov.il.
+// · צורת הכתובת: ‎/all בסוף הנתיב ו-format=jsondata החזירו 404.
+//   הצורה שעובדת היא בלי מפתח סדרה ועם format=sdmx-json.
 const EDGE = "https://edge.boi.gov.il/FusionEdgeServer";
-const BOI_ENDPOINTS = ["https://boi.org.il/PublicApi/GetInterest"];
+const BOI_ENDPOINTS = [
+  "https://boi.org.il/PublicApi/GetInterest",
+  `${EDGE}/sdmx/v2/data/dataflow/BOI.STATISTICS/BR/1.0?lastNObservations=${BOI_FETCH_OBSERVATIONS}&format=sdmx-json`,
+];
 
 /**
  * קטלוג עולמות התוכן של בנק ישראל — נמשך רק במצב אבחון.
@@ -44,22 +51,9 @@ const BOI_ENDPOINTS = ["https://boi.org.il/PublicApi/GetInterest"];
  */
 const BOI_CATALOG_URL = `${EDGE}/ws/public/sdmxapi/rest/dataflow/BOI.STATISTICS/all/latest?format=sdmx-json&detail=allstubs`;
 
-/**
- * ניסויי צורת כתובת — אבחון בלבד, לעולם לא מזינים נתון מוצג.
- * נתיב המבנה מחזיר 200 בעוד נתיב הנתונים מחזיר 404, ולכן כאן
- * נבדקות צורות שונות של נתיב הנתונים מול BIR — עולם תוכן שידוע
- * שקיים. מה שמעניין הוא הסטטוס, לא התוכן.
- */
-const BOI_PROBE_ENDPOINTS = [
-  `${EDGE}/ws/public/sdmxapi/rest/data/BOI.STATISTICS,BIR,1.0/all/all?lastNObservations=1&format=jsondata`,
-  `${EDGE}/ws/public/sdmxapi/rest/data/BIR?lastNObservations=1&format=jsondata`,
-  `${EDGE}/sdmx/v2/data/dataflow/BOI.STATISTICS/BIR/1.0?lastNObservations=1&format=sdmx-json`,
-  `${EDGE}/sdmx/v2/data/dataflow/BOI.STATISTICS/BIR/1.0/*?lastNObservations=1&format=sdmx-json`,
-];
-
 const TIMEOUT_MS = 9000;
-/** גוף תשובת אבחון נחתך — הסטטוס הוא מה שמעניין, לא המבנה המלא */
-const PROBE_BODY_CHARS = 700;
+/** הסדרה ההיסטורית אינה חוסמת את שאר הנתונים, ולכן תקציב קצר יותר */
+const HISTORY_TIMEOUT_MS = 6000;
 
 interface Attempt {
   url: string;
@@ -116,32 +110,6 @@ async function fetchJson(
   }
 }
 
-/** משיכת טקסט גולמי קצוץ, לאבחון בלבד */
-async function probe(url: string): Promise<Attempt> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 6000);
-  try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: { "User-Agent": "shalom-noy-calc/1.0" },
-      cache: "no-store",
-    });
-    const text = await res.text();
-    return {
-      url,
-      status: res.status,
-      ok: res.ok,
-      error: res.ok ? undefined : `HTTP ${res.status}`,
-      body: text.slice(0, PROBE_BODY_CHARS),
-    };
-  } catch (e) {
-    const msg = e instanceof Error ? (e.name === "AbortError" ? "timeout" : e.message) : "שגיאה";
-    return { url, ok: false, error: msg };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 /** מנסה את המקורות לפי הסדר עד שאחד מהם מחזיר נתון שניתן לפענח */
 async function resolve<T>(
   urls: string[],
@@ -183,7 +151,7 @@ async function resolveBoi(): Promise<{
 
   for (let i = 0; i < BOI_ENDPOINTS.length; i++) {
     if (rate && history) break;
-    const { json, attempt } = await fetchJson(BOI_ENDPOINTS[i], i === 0 ? TIMEOUT_MS : 4000);
+    const { json, attempt } = await fetchJson(BOI_ENDPOINTS[i], i === 0 ? TIMEOUT_MS : HISTORY_TIMEOUT_MS);
     if (json === null) {
       attempts.push(attempt);
       continue;
@@ -200,7 +168,10 @@ async function resolveBoi(): Promise<{
       });
     }
     const gotRate: BoiReading | null = rate ?? parseBoi(json);
-    const gotHistory: BoiReading[] | null = history ?? buildBoiHistory(json);
+    // הריבית הנוכחית מ-PublicApi כבר ידועה בשלב הזה, ומשמשת לאמת
+    // איזו סדרה בעולם התוכן היא באמת ריבית בנק ישראל
+    const gotHistory: BoiReading[] | null =
+      history ?? buildBoiHistory(json, BOI_HISTORY_MONTHS, rate?.rate);
     const useful = (!rate && gotRate) || (!history && gotHistory);
     attempts.push(useful ? attempt : { ...attempt, ok: false, error: "לא נמצא נתון מוכר בתשובה" });
     rate = gotRate;
@@ -248,16 +219,13 @@ export async function GET(request: Request) {
   };
 
   // בדיקות האבחון נמשכות רק במצב debug, ולעולם אינן מזינות נתון מוצג
-  const [probes, catalog] = debug
-    ? await Promise.all([
-        Promise.all(BOI_PROBE_ENDPOINTS.map(probe)),
-        fetchJson(BOI_CATALOG_URL, 8000).then(({ json, attempt }) => ({
-          status: attempt.status,
-          error: attempt.error,
-          flows: parseDataflowCatalog(json as Parameters<typeof parseDataflowCatalog>[0]),
-        })),
-      ])
-    : [[], null];
+  const catalog = debug
+    ? await fetchJson(BOI_CATALOG_URL, 8000).then(({ json, attempt }) => ({
+        status: attempt.status,
+        error: attempt.error,
+        flows: parseDataflowCatalog(json as Parameters<typeof parseDataflowCatalog>[0]),
+      }))
+    : null;
 
   // 200 גם בכשל חלקי — הלקוח מציג את מה שהתקבל ומשלים מהמטמון המקומי
   return NextResponse.json(
@@ -269,7 +237,6 @@ export async function GET(request: Request) {
             boi: boiRes.attempts,
             boiSeries: boiRes.series,
             boiCatalog: catalog,
-            boiProbes: probes,
           },
         }
       : data,

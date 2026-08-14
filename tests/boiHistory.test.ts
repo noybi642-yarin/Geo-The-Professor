@@ -3,6 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  BOI_FETCH_OBSERVATIONS,
   BOI_FETCH_RECORDS,
   BOI_HISTORY_MONTHS,
   buildBoiHistory,
@@ -235,7 +236,8 @@ test("בחירה — כשאי אפשר להכריע לא מוצגת סדרה כ�
   assert.equal(parseBoi(p), null);
 });
 
-test("בחירה — שתי סדרות שנראות שתיהן כריבית המדיניות אינן מוכרעות", () => {
+test("בחירה — סדרות שמסכימות על אותה ריבית אינן אי-בהירות", () => {
+  // אותה ריבית בשתי תדירויות — אין על מה להתלבט
   const p = sdmxMulti(
     ["ריבית בנק ישראל — יומי", "ריבית בנק ישראל — חודשי"],
     ["2026-05", "2026-06"],
@@ -244,7 +246,94 @@ test("בחירה — שתי סדרות שנראות שתיהן כריבית המ
       [4.5, 4.25],
     ]
   );
+  const chosen = pickPolicyRateSeries(sdmxSeriesList(p));
+  assert.ok(chosen, "שתיהן מראות 4.25 — אין סיבה לוותר");
+  assert.equal(chosen!.readings[0].rate, 4.25);
+});
+
+test("בחירה — שתי סדרות מזוהות שחלוקות על הריבית אינן מוכרעות", () => {
+  const p = sdmxMulti(
+    ["ריבית בנק ישראל — נומינלית", "ריבית בנק ישראל — אפקטיבית"],
+    ["2026-05", "2026-06"],
+    [
+      [4.5, 4.25],
+      [4.6, 4.4],
+    ]
+  );
   assert.equal(pickPolicyRateSeries(sdmxSeriesList(p)), null);
+});
+
+// ─── אימות מול הריבית הנוכחית הידועה ───────────────────────────
+
+test("אימות — הריבית מ-PublicApi מכריעה איזו סדרה היא הנכונה", () => {
+  // שתי סדרות ללא תווית מזהה, וחלוקות — לבדן אינן ניתנות להכרעה
+  const p = sdmxMulti(
+    ["סדרה א", "סדרה ב"],
+    ["2026-05", "2026-06"],
+    [
+      [4.1, 4.05],
+      [4.5, 4.25],
+    ]
+  );
+  assert.equal(pickPolicyRateSeries(sdmxSeriesList(p)), null, "בלי אימות — אין הכרעה");
+
+  // הריבית הנוכחית מהמקור הרשמי היא 4.25, וזו סדרה ב׳
+  const chosen = pickPolicyRateSeries(sdmxSeriesList(p), 4.25)!;
+  assert.equal(chosen.label, "סדרה ב · חודשי");
+  const h = buildBoiHistory(p, BOI_HISTORY_MONTHS, 4.25)!;
+  assert.equal(h[0].rate, 4.25);
+  close(h[0].changePts!, -0.25, 1e-12);
+});
+
+test("אימות — ריבית ידועה שאינה תואמת לאף סדרה אינה גוררת בחירה שגויה", () => {
+  const p = sdmxMulti(
+    ["סדרה א", "סדרה ב"],
+    ["2026-05", "2026-06"],
+    [
+      [4.1, 4.05],
+      [4.5, 4.25],
+    ]
+  );
+  // אף סדרה אינה מסתיימת ב-3.5 — נופלים חזרה לזיהוי לפי תווית,
+  // שגם הוא אינו מכריע, ולכן לא מוצג כלום
+  assert.equal(pickPolicyRateSeries(sdmxSeriesList(p), 3.5), null);
+});
+
+// ─── תדירות יומית ──────────────────────────────────────────────
+
+test("תדירות — סדרה יומית מצטמצמת לקריאה אחת לחודש", () => {
+  // ריבית מדיניות עשויה להתפרסם כל יום; 12 ימים אינם היסטוריה
+  const rows: [string, number][] = [];
+  for (let d = 1; d <= 20; d++) rows.push([`2026-05-${String(d).padStart(2, "0")}`, 4.5]);
+  for (let d = 1; d <= 20; d++) rows.push([`2026-06-${String(d).padStart(2, "0")}`, 4.25]);
+  const h = buildBoiHistory(sdmx(rows))!;
+
+  assert.equal(h.length, 2, "שני חודשים, לא ארבעים ימים");
+  assert.equal(h[0].effectiveDate, "2026-06-20", "הקריאה האחרונה בחודש");
+  assert.equal(h[0].rate, 4.25);
+  close(h[0].changePts!, -0.25, 1e-12, "השינוי נמדד מול החודש הקודם");
+  assert.equal(h[1].effectiveDate, "2026-05-20");
+});
+
+test("תדירות — סדרה חודשית אינה מושפעת מהצמצום", () => {
+  const h = buildBoiHistory(sdmx(thirteen()))!;
+  assert.equal(h.length, 12);
+  assert.equal(h[0].effectiveDate, "2026-06");
+});
+
+test("תדירות — כשאין תאריך לזהות ממנו חודש הסדרה נשארת כמות שהיא", () => {
+  const p = {
+    data: {
+      dataSets: [{ series: { "0:0": { observations: { "0": [4.5], "1": [4.25] } } } }],
+      structures: [{ dimensions: { observation: [{ values: [{ id: "" }, { id: "" }] }] } }],
+    },
+  };
+  const h = buildBoiHistory(p)!;
+  assert.equal(h.length, 2, "לא ממציאים מבנה חודשי");
+});
+
+test("תדירות — מספר התצפיות שנמשך מכסה 13 חודשים גם בתדירות יומית", () => {
+  assert.ok(BOI_FETCH_OBSERVATIONS >= 13 * 31, "פחות מזה לא יספיק לסדרה יומית");
 });
 
 test("סדרות — מבנה בצורת structure יחיד נתמך כמו structures", () => {
