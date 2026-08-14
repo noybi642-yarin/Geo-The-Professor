@@ -4,6 +4,7 @@ import Link from "next/link";
 import { fmtNum, fmtPct, round2 } from "@/lib/finance";
 import { hebrewMonth, PRIME_SPREAD } from "@/lib/liveData";
 import { fmtStamp, useLiveData } from "@/lib/useLiveData";
+import { PtsMark } from "./BoiHistory";
 import { ChangeMark } from "./CpiHistory";
 
 /**
@@ -66,15 +67,25 @@ export default function LiveDataCard() {
               </span>
             </Link>
 
-            <div className="live-item">
-              <span className="live-label">ריבית בנק ישראל</span>
+            <Link
+              href="/boi-history"
+              className="live-item live-item-btn"
+              aria-label="מעבר לעמוד היסטוריית ריבית בנק ישראל"
+            >
+              <span className="live-label">
+                ריבית בנק ישראל
+                <span className="live-more">היסטוריה ←</span>
+              </span>
               <span className="live-value">
                 {data!.boi ? fmtPct(round2(data!.boi.rate)) : "—"}
               </span>
+              {data!.boi?.changePts !== undefined ? (
+                <PtsMark pts={data!.boi.changePts} suffix="מהתקופה הקודמת" />
+              ) : null}
               <span className="live-sub">
-                {data!.boi?.effectiveDate ? `מתאריך ${data!.boi.effectiveDate}` : " "}
+                {data!.boi?.effectiveDate ? `מתאריך ${data!.boi.effectiveDate}` : " "}
               </span>
-            </div>
+            </Link>
 
             <div className="live-item live-prime">
               <span className="live-label">ריבית פריים</span>

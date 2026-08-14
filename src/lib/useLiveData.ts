@@ -46,6 +46,7 @@ export function useLiveData(): UseLiveData {
       cpi: fresh.cpi ?? prev.cpi,
       cpiHistory: fresh.cpiHistory ?? prev.cpiHistory ?? null,
       boi: fresh.boi ?? prev.boi,
+      boiHistory: fresh.boiHistory ?? prev.boiHistory ?? null,
       prime: fresh.prime ?? prev.prime,
       fetchedAt: fresh.fetchedAt,
       errors: fresh.errors,

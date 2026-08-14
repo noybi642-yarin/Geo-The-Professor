@@ -42,7 +42,19 @@ export interface BoiReading {
   rate: number;
   /** תאריך התחולה, אם נמסר (ISO או טקסט) */
   effectiveDate?: string;
+  /**
+   * השינוי מול הקריאה הקודמת — ב**נקודות אחוז**, לא באחוזים.
+   * מעבר מ-4.5% ל-4.25% הוא ‎-0.25 נקודות אחוז.
+   * undefined כאשר אין קריאה קודמת להשוואה.
+   */
+  changePts?: number;
 }
+
+/** מספר התקופות שמוצגות בהיסטוריית הריבית */
+export const BOI_HISTORY_MONTHS = 12;
+
+/** תקופה נוספת מעבר לתצוגה, לחישוב השינוי של הישנה ביותר */
+export const BOI_FETCH_RECORDS = BOI_HISTORY_MONTHS + 1;
 
 export interface LiveData {
   cpi: CpiReading | null;
@@ -52,6 +64,11 @@ export interface LiveData {
    */
   cpiHistory?: CpiReading[] | null;
   boi: BoiReading | null;
+  /**
+   * היסטוריית ריבית בנק ישראל — מהחדש לישן, עד 12 תקופות.
+   * null כאשר לא התקבלה; אין לכך השפעה על שאר הנתונים.
+   */
+  boiHistory?: BoiReading[] | null;
   /** ריבית פריים מחושבת: boi.rate + PRIME_SPREAD */
   prime: number | null;
   /** מועד המשיכה בפועל (ISO) */
@@ -250,6 +267,94 @@ function parseSdmxRate(payload: Json): BoiReading | null {
 
   if (rate === null) return null;
   return { rate, effectiveDate: periods[bestIdx] || undefined };
+}
+
+/**
+ * כל התצפיות בסדרת SDMX, מהחדשה לישנה.
+ * ריבית בנק ישראל אינה מתפרסמת כערך חודשי חדש בכל חודש אלא משתנה
+ * רק בהחלטת ועדה — ולכן הסדרה עשויה להכיל ערכים חוזרים, וזה תקין.
+ */
+function parseSdmxSeries(payload: Json): BoiReading[] {
+  if (!isObj(payload)) return [];
+  const data = isObj(payload.data) ? payload.data : payload;
+  const dataSets = (data as Record<string, Json>).dataSets;
+  if (!Array.isArray(dataSets) || dataSets.length === 0) return [];
+  const first = dataSets[0];
+  if (!isObj(first) || !isObj(first.series)) return [];
+
+  let periods: string[] = [];
+  const structures = (data as Record<string, Json>).structures;
+  const struct = Array.isArray(structures) ? structures[0] : undefined;
+  if (isObj(struct) && isObj(struct.dimensions)) {
+    const obsDims = (struct.dimensions as Record<string, Json>).observation;
+    if (Array.isArray(obsDims) && isObj(obsDims[0])) {
+      const vals = (obsDims[0] as Record<string, Json>).values;
+      if (Array.isArray(vals)) {
+        periods = vals.map((v) => {
+          if (!isObj(v)) return "";
+          const id = pick(v, ["id", "name", "start"]);
+          return typeof id === "string" ? id : "";
+        });
+      }
+    }
+  }
+
+  const byIdx = new Map<number, BoiReading>();
+  const series = first.series as Record<string, Json>;
+  for (const key of Object.keys(series)) {
+    const sObj = series[key];
+    if (!isObj(sObj) || !isObj(sObj.observations)) continue;
+    const obs = sObj.observations as Record<string, Json>;
+    for (const oKey of Object.keys(obs)) {
+      const idx = parseInt(oKey, 10);
+      if (!Number.isFinite(idx)) continue;
+      const arr = obs[oKey];
+      const v = Array.isArray(arr) ? toNumber(arr[0]) : toNumber(arr);
+      if (v === null || v < -5 || v > 40) continue;
+      if (!byIdx.has(idx)) {
+        byIdx.set(idx, { rate: v, effectiveDate: periods[idx] || undefined });
+      }
+    }
+  }
+
+  return Array.from(byIdx.entries())
+    .sort((a, b) => b[0] - a[0])
+    .map(([, r]) => r);
+}
+
+/**
+ * השינוי בין שתי קריאות ריבית — ב**נקודות אחוז**.
+ * ריבית היא כבר אחוז, ולכן ההפרש בין שתי ריביות אינו אחוז שינוי
+ * אלא הפרש בנקודות: 4.5% → 4.25% הוא ‎-0.25 נקודות אחוז.
+ */
+export function rateChangePts(current: number, previous: number): number | null {
+  if (!Number.isFinite(current) || !Number.isFinite(previous)) return null;
+  return current - previous;
+}
+
+/** מוסיף לכל קריאה את השינוי בנקודות מול הקריאה שקדמה לה */
+export function withRateChange(series: BoiReading[]): BoiReading[] {
+  return series.map((r, i) => {
+    const prev = series[i + 1];
+    const pts = prev ? rateChangePts(r.rate, prev.rate) : null;
+    return pts === null ? { ...r } : { ...r, changePts: pts };
+  });
+}
+
+/**
+ * בונה את היסטוריית ריבית בנק ישראל להצגה.
+ * הרשומה הנוספת משמשת רק לחישוב השינוי של הישנה ביותר שמוצגת.
+ */
+export function buildBoiHistory(
+  payload: Json,
+  months = BOI_HISTORY_MONTHS
+): BoiReading[] | null {
+  const series = parseSdmxSeries(payload);
+  if (series.length === 0) {
+    // מקור ללא סדרה (PublicApi) — קריאה בודדת אינה היסטוריה
+    return null;
+  }
+  return withRateChange(series).slice(0, months);
 }
 
 /**

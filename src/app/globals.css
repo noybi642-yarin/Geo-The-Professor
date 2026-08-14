@@ -1664,6 +1664,21 @@ a.live-item-btn {
   padding: 10px 10px;
 }
 
+/* 4 עמודות — צפיפות גבוהה יותר כדי להיכנס במובייל בלי גלילה */
+.boi-table th,
+.boi-table td {
+  padding: 9px 6px;
+  font-size: 12.5px;
+}
+
+@media (min-width: 480px) {
+  .boi-table th,
+  .boi-table td {
+    padding: 10px 10px;
+    font-size: 13.5px;
+  }
+}
+
 .cpi-foot {
   margin-top: 14px;
   font-size: 11.5px;
