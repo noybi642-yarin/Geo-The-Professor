@@ -25,11 +25,16 @@ const CPI_ENDPOINTS = [
   `https://api.cbs.gov.il/index/data/price_selected?id=120010&format=json&download=false&last=${CPI_FETCH_RECORDS}`,
 ];
 
-// הסדרה מספקת גם את הריבית הנוכחית וגם את ההיסטוריה בקריאה אחת;
-// ה-PublicApi נשאר כגיבוי לריבית הנוכחית בלבד (הוא אינו מחזיר סדרה).
+// ה-PublicApi מאומת ומחזיר את הריבית הנוכחית, אך ללא סדרה
+// היסטורית. הכתובות שאחריו הן מועמדות להיסטוריה בלבד — הן נוסו
+// בסדר הזה, וכל כשל שלהן אינו פוגע בריבית הנוכחית.
+// ⚠️ ה-dataflow שנוסה תחת BOI.STATISTICS/RATE_BOI החזיר 404;
+// הכתובת הנכונה להיסטוריה טרם אותרה.
 const BOI_ENDPOINTS = [
-  `https://edge.boi.gov.il/FusionEdgeServer/sdmx/v2/data/dataflow/BOI.STATISTICS/RATE_BOI/1.0/all?format=jsondata&lastNObservations=${BOI_FETCH_RECORDS}`,
   "https://boi.org.il/PublicApi/GetInterest",
+  "https://boi.org.il/PublicApi/GetInterestRates",
+  "https://boi.org.il/PublicApi/GetInterestList",
+  `https://edge.boi.gov.il/FusionEdgeServer/sdmx/v2/data/dataflow/BOI.STATISTICS/RATE_BOI/1.0/all?format=jsondata&lastNObservations=${BOI_FETCH_RECORDS}`,
 ];
 
 const TIMEOUT_MS = 9000;
@@ -43,9 +48,12 @@ interface Attempt {
   body?: unknown;
 }
 
-async function fetchJson(url: string): Promise<{ json: unknown; attempt: Attempt }> {
+async function fetchJson(
+  url: string,
+  timeoutMs = TIMEOUT_MS
+): Promise<{ json: unknown; attempt: Attempt }> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
       signal: controller.signal,
@@ -98,20 +106,51 @@ async function resolve<T>(
   return { value: null, attempts };
 }
 
+/**
+ * משיכת ריבית בנק ישראל וההיסטוריה שלה במעבר אחד על הכתובות.
+ * כל תשובה נבדקת לשני הצרכים, כדי לא למשוך את אותה כתובת פעמיים.
+ * הכתובות שאחרי הראשונה מקבלות תקציב זמן קצר יותר — הן מועמדות
+ * להיסטוריה בלבד, ואין להאט בגללן את שאר הנתונים.
+ */
+async function resolveBoi(): Promise<{
+  rate: BoiReading | null;
+  history: BoiReading[] | null;
+  attempts: Attempt[];
+}> {
+  const attempts: Attempt[] = [];
+  let rate: BoiReading | null = null;
+  let history: BoiReading[] | null = null;
+
+  for (let i = 0; i < BOI_ENDPOINTS.length; i++) {
+    if (rate && history) break;
+    const { json, attempt } = await fetchJson(BOI_ENDPOINTS[i], i === 0 ? TIMEOUT_MS : 4000);
+    if (json === null) {
+      attempts.push(attempt);
+      continue;
+    }
+    const gotRate: BoiReading | null = rate ?? parseBoi(json);
+    const gotHistory: BoiReading[] | null = history ?? buildBoiHistory(json);
+    const useful = (!rate && gotRate) || (!history && gotHistory);
+    attempts.push(useful ? attempt : { ...attempt, ok: false, error: "לא נמצא נתון מוכר בתשובה" });
+    rate = gotRate;
+    history = gotHistory;
+  }
+
+  return { rate, history, attempts };
+}
+
 export async function GET(request: Request) {
   const debug = new URL(request.url).searchParams.get("debug") === "1";
 
-  const [cpiRes, boiRes, boiHistRes] = await Promise.all([
+  const [cpiRes, boiRes] = await Promise.all([
     // הסדרה נפתרת בבת אחת: הקריאה העדכנית היא האיבר הראשון בה
     resolve<CpiReading[]>(CPI_ENDPOINTS, (json) => buildCpiHistory(json)),
-    resolve<BoiReading>(BOI_ENDPOINTS, parseBoi),
-    // הסדרה נמשכת מאותן כתובות; כשל בה אינו פוגע בריבית הנוכחית
-    resolve<BoiReading[]>(BOI_ENDPOINTS, (json) => buildBoiHistory(json)),
+    resolveBoi(),
   ]);
 
   const history = cpiRes.value;
   const latest = history?.[0] ?? null;
-  const boiHistory = boiHistRes.value;
+  const boiHistory = boiRes.history;
 
   const errors: LiveData["errors"] = [];
   if (!latest)
@@ -119,7 +158,7 @@ export async function GET(request: Request) {
       source: "cpi",
       message: cpiRes.attempts.map((a) => a.error).filter(Boolean).join(" · ") || "לא זמין",
     });
-  if (!boiRes.value)
+  if (!boiRes.rate)
     errors.push({
       source: "boi",
       message: boiRes.attempts.map((a) => a.error).filter(Boolean).join(" · ") || "לא זמין",
@@ -129,10 +168,10 @@ export async function GET(request: Request) {
     cpi: latest,
     // כשל בהיסטוריה אינו פוגע במדד הנוכחי, בריבית בנק ישראל או בפריים
     cpiHistory: history && history.length > 1 ? history : null,
-    boi: boiRes.value,
+    boi: boiRes.rate,
     // כשל בהיסטוריה אינו פוגע בריבית הנוכחית או בפריים
     boiHistory: boiHistory && boiHistory.length > 1 ? boiHistory : null,
-    prime: calcPrime(boiRes.value?.rate),
+    prime: calcPrime(boiRes.rate?.rate),
     fetchedAt: new Date().toISOString(),
     errors,
   };
@@ -145,7 +184,6 @@ export async function GET(request: Request) {
           _debug: {
             cpi: cpiRes.attempts,
             boi: boiRes.attempts,
-            boiHistory: boiHistRes.attempts,
           },
         }
       : data,

@@ -3,6 +3,12 @@
 import Link from "next/link";
 import { fmtNum, fmtPct, round2 } from "@/lib/finance";
 import { hebrewMonth, PRIME_SPREAD } from "@/lib/liveData";
+
+const fmtDay = (iso: string) => {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return new Intl.DateTimeFormat("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
+};
 import { fmtStamp, useLiveData } from "@/lib/useLiveData";
 import { PtsMark } from "./BoiHistory";
 import { ChangeMark } from "./CpiHistory";
@@ -17,6 +23,9 @@ export default function LiveDataCard() {
   const { data, savedAt, stale, loading, reload } = useLiveData();
 
   const hasAny = !!(data?.cpi || data?.boi);
+  // קישור להיסטוריה מוצג רק כשיש מה להציג בה
+  const hasCpiHistory = (data?.cpiHistory?.length ?? 0) > 1;
+  const hasBoiHistory = (data?.boiHistory?.length ?? 0) > 1;
 
   return (
     <section className="panel live-card">
@@ -47,12 +56,13 @@ export default function LiveDataCard() {
           <div className="live-grid">
             <Link
               href="/cpi-history"
-              className="live-item live-item-btn"
+              className={`live-item${hasCpiHistory ? " live-item-btn" : ""}`}
               aria-label="מעבר לעמוד היסטוריית מדד המחירים לצרכן"
+              {...(hasCpiHistory ? {} : { "aria-disabled": true, tabIndex: -1 })}
             >
               <span className="live-label">
                 מדד המחירים לצרכן
-                <span className="live-more">היסטוריה ←</span>
+                {hasCpiHistory && <span className="live-more">היסטוריה ←</span>}
               </span>
               <span className="live-value">
                 {data!.cpi ? fmtNum(round2(data!.cpi.value)) : "—"}
@@ -67,25 +77,44 @@ export default function LiveDataCard() {
               </span>
             </Link>
 
-            <Link
-              href="/boi-history"
-              className="live-item live-item-btn"
-              aria-label="מעבר לעמוד היסטוריית ריבית בנק ישראל"
-            >
-              <span className="live-label">
-                ריבית בנק ישראל
-                <span className="live-more">היסטוריה ←</span>
-              </span>
-              <span className="live-value">
-                {data!.boi ? fmtPct(round2(data!.boi.rate)) : "—"}
-              </span>
-              {data!.boi?.changePts !== undefined ? (
-                <PtsMark pts={data!.boi.changePts} suffix="מהתקופה הקודמת" />
-              ) : null}
-              <span className="live-sub">
-                {data!.boi?.effectiveDate ? `מתאריך ${data!.boi.effectiveDate}` : " "}
-              </span>
-            </Link>
+            {(() => {
+              const tile = (
+                <>
+                  <span className="live-label">
+                    ריבית בנק ישראל
+                    {hasBoiHistory && <span className="live-more">היסטוריה ←</span>}
+                  </span>
+                  <span className="live-value">
+                    {data!.boi ? fmtPct(round2(data!.boi.rate)) : "—"}
+                  </span>
+                  {data!.boi?.changePts !== undefined ? (
+                    <PtsMark pts={data!.boi.changePts} suffix="מהתקופה הקודמת" />
+                  ) : null}
+                  <span className="live-sub">
+                    {data!.boi?.effectiveDate
+                      ? `פורסם ${fmtDay(data!.boi.effectiveDate)}`
+                      : " "}
+                  </span>
+                  {data!.boi?.nextDecisionDate && (
+                    <span className="live-sub">
+                      החלטה הבאה: {fmtDay(data!.boi.nextDecisionDate)}
+                    </span>
+                  )}
+                </>
+              );
+              // הכרטיס הופך לקישור רק כשיש היסטוריה להציג
+              return hasBoiHistory ? (
+                <Link
+                  href="/boi-history"
+                  className="live-item live-item-btn"
+                  aria-label="מעבר לעמוד היסטוריית ריבית בנק ישראל"
+                >
+                  {tile}
+                </Link>
+              ) : (
+                <div className="live-item">{tile}</div>
+              );
+            })()}
 
             <div className="live-item live-prime">
               <span className="live-label">ריבית פריים</span>
