@@ -342,6 +342,11 @@ textarea {
   min-width: 0;
 }
 
+/* כפתור החזרה לא מתכווץ כשהכותרת ארוכה */
+.back-btn {
+  flex-shrink: 0;
+}
+
 .topbar-title {
   font-size: 15px;
   font-weight: 600;

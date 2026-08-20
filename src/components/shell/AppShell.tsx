@@ -6,6 +6,7 @@ import {
   ICON_MD,
   ICON_SM,
   ICON_STROKE,
+  IconBack,
   IconCalculators,
 } from "@/components/ui/icons";
 import {
@@ -50,6 +51,11 @@ export default function AppShell({
   children: ReactNode;
 }) {
   const bottomKey = activeScreen ? bottomNavKeyFor(activeScreen) : "";
+
+  // חזרה לדף הבית מכל מסך שאינו הבית עצמו. בעמוד הראשי זו החלפת
+  // מסך; בעמוד שהוא נתיב אמיתי זה קישור, כדי שגם פתיחה בכרטיסייה
+  // חדשה וגם לחיצה ימנית יעבדו כרגיל.
+  const showBack = activeScreen ? activeScreen !== "home" : !!activeHref;
 
   /** פריט מסך: כפתור בעמוד הראשי, קישור בכל עמוד אחר */
   const renderEntry = (e: NavEntry) => {
@@ -140,6 +146,22 @@ export default function AppShell({
         <header className="topbar">
           <div className="topbar-inner">
             <div className="topbar-lead">
+              {showBack &&
+                (onNavigate ? (
+                  <button
+                    type="button"
+                    className="head-btn back-btn"
+                    onClick={() => onNavigate("home")}
+                  >
+                    <IconBack size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+                    חזור
+                  </button>
+                ) : (
+                  <Link href="/" className="head-btn back-btn">
+                    <IconBack size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+                    חזור
+                  </Link>
+                ))}
               <h1 className="topbar-title">{title}</h1>
             </div>
             {actions && <div className="topbar-actions">{actions}</div>}
