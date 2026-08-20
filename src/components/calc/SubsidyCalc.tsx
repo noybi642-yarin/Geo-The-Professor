@@ -21,6 +21,7 @@ import {
   usePersistentState,
   useToast,
 } from "./shared";
+import { ICON_SM, ICON_STROKE, IconDeal, IconInfo, IconResults, IconSubsidy } from "@/components/ui/icons";
 
 /**
  * מצבי המחשבון.
@@ -142,7 +143,7 @@ export default function SubsidyCalc({ settings }: { settings: Settings }) {
       `🤑 עלות הסבסוד לסוכנות: ${fmtMoney(res.subsidy)}`,
       `📊 סך ההפרשים לאורך התקופה: ${fmtMoney(res.nominalDiff)}`,
     ].filter(Boolean);
-    if (await copyText(lines.join("\n"))) notify("החישוב הועתק ✓");
+    if (await copyText(lines.join("\n"))) notify("החישוב הועתק");
   };
 
   const doCalc = () => {
@@ -154,7 +155,7 @@ export default function SubsidyCalc({ settings }: { settings: Settings }) {
 
   const clear = () => {
     setF({ ...INITIAL, mode: f.mode });
-    notify("נוקה ✨");
+    notify("נוקה");
   };
 
   const activeMode = MODES.find((m) => m.id === f.mode)!;
@@ -163,7 +164,10 @@ export default function SubsidyCalc({ settings }: { settings: Settings }) {
     <div className="calc-screen">
       {/* ── בחירת מצב ── */}
       <section className="panel">
-        <h2 className="panel-title">🤑 מה את צריכה לחשב?</h2>
+        <h2 className="panel-title">
+            <IconSubsidy size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+            מה את צריכה לחשב?
+          </h2>
         <div className="mode-tabs" role="tablist" aria-label="מצב החישוב">
           {MODES.map((m) => (
             <button
@@ -184,7 +188,10 @@ export default function SubsidyCalc({ settings }: { settings: Settings }) {
 
       {/* ── שדות ── */}
       <section className="panel">
-        <h2 className="panel-title">📋 פרטי העסקה</h2>
+        <h2 className="panel-title">
+            <IconDeal size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+            פרטי העסקה
+          </h2>
         <div className="fields-grid">
           {/* במצב היעד המהיר לא מציגים את מחיר הרכב */}
           {f.mode !== "target" && (
@@ -254,26 +261,29 @@ export default function SubsidyCalc({ settings }: { settings: Settings }) {
 
       {/* ── תוצאות ── */}
       <section className="panel" id="subsidy-results">
-        <h2 className="panel-title">💙 תוצאות</h2>
+        <h2 className="panel-title">
+            <IconResults size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+            תוצאות
+          </h2>
         {res.ok ? (
           <>
             <div className="meta-badges">
-              <span className="badge">💯 עסקה {fmtPct(dealRateN)}</span>
-              <span className="badge">🎯 ללקוח {fmtPct(round2(effectiveCustomerRate))}</span>
-              <span className="badge">🗓️ {fmtNum(monthsN)} תשלומים</span>
-              {rateSaving > 0 && <span className="badge">📉 ‎-{fmtPct(rateSaving)}</span>}
+              <span className="badge">עסקה {fmtPct(dealRateN)}</span>
+              <span className="badge">ללקוח {fmtPct(round2(effectiveCustomerRate))}</span>
+              <span className="badge">{fmtNum(monthsN)} תשלומים</span>
+              {rateSaving > 0 && <span className="badge">‎-{fmtPct(rateSaving)}</span>}
             </div>
 
             {isBudget ? (
               <ResultHero
-                label="🎯 הריבית החדשה"
+                label="הריבית החדשה"
                 value={fmtPct(round2(res.newRate))}
                 sub={`בסבסוד של ${fmtMoney(budgetN)} — ירידה של ${fmtPct(rateSaving)}`}
                 flash={flash}
               />
             ) : (
               <ResultHero
-                label="💰 עלות הסבסוד"
+                label="עלות הסבסוד"
                 value={fmtMoney(res.subsidy)}
                 sub={`להורדת הריבית מ-${fmtPct(dealRateN)} ל-${fmtPct(round2(effectiveCustomerRate))}`}
                 flash={flash}
@@ -282,7 +292,8 @@ export default function SubsidyCalc({ settings }: { settings: Settings }) {
 
             {res.subsidy < 0 && (
               <div className="alert alert-bdm">
-                🔶 הריבית ללקוח גבוהה מריבית העסקה — אין כאן סבסוד אלא תוספת.
+                <IconInfo size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+            הריבית ללקוח גבוהה מריבית העסקה — אין כאן סבסוד אלא תוספת.
               </div>
             )}
 
@@ -325,7 +336,7 @@ export default function SubsidyCalc({ settings }: { settings: Settings }) {
             </div>
           </>
         ) : (
-          <div className="empty-note">{res.error ?? "הזיני נתונים ונחשב יחד 💙"}</div>
+          <div className="empty-note">{res.error ?? "הזיני נתונים כדי לחשב"}</div>
         )}
       </section>
 

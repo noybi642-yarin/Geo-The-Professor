@@ -14,14 +14,25 @@ export interface ChartPoint {
   display: string;
 }
 
-const W = 320;
-const H = 110;
-const PAD = { top: 12, right: 30, bottom: 22, left: 30 };
+/**
+ * ה-viewBox נבחר גדול יחסית בכוונה: ה-SVG נמתח לרוחב המכל, וכל
+ * מה שבתוכו נמתח איתו. viewBox צר היה מגדיל את עובי הקו פי כמה
+ * במסך רחב. בגודל הזה יחס ההגדלה קרוב ל-1 בדסקטופ.
+ */
+const W = 640;
+const H = 220;
+const PAD = { top: 16, right: 12, bottom: 12, left: 12 };
+/** קווי רשת אופקיים — נסוגים, רק כדי לתת קנה מידה לעין */
+const GRID_LINES = 4;
 
 /**
  * גרף היסטוריה לסדרה אחת — ולכן ללא מקרא; הכותרת מזהה את הסדרה.
  * צירים דקים ונסוגים, קו 2px, ושטח פגיעה רחב בהרבה מהנקודות.
  * הערכים נגישים גם בלי הגרף — הטבלה שלצידו מציגה את כולם.
+ *
+ * תוויות הציר הן HTML ולא טקסט בתוך ה-SVG: טקסט בתוך SVG נמתח
+ * יחד עם המכל ומאבד את גודלו, ומחוץ לו הוא נשאר בטיפוגרפיה של
+ * המערכת בכל רוחב מסך.
  *
  * step: ריבית מדיניות מחזיקה על ערך קבוע וקופצת בהחלטה. קו משופע
  * היה מרמז על שינוי הדרגתי שלא קרה, ולכן היא מוצגת במדרגות.
@@ -51,7 +62,7 @@ export default function HistoryChart({
 
   const plotW = W - PAD.left - PAD.right;
   const plotH = H - PAD.top - PAD.bottom;
-  // ציר הזמן זורם ימין→שמאל, בהתאם לכיוון הקריאה בעברית:
+  // ציר הזמן זורם ימין←שמאל, בהתאם לכיוון הקריאה בעברית:
   // התקופה הישנה ביותר בקצה הימני, העדכנית ביותר בקצה השמאלי
   const x = (i: number) =>
     data.length === 1
@@ -74,79 +85,97 @@ export default function HistoryChart({
   const last = data[data.length - 1];
 
   return (
-    <svg
-      className="cpi-chart"
-      viewBox={`0 0 ${W} ${H}`}
-      role="img"
-      aria-label={ariaLabel}
-      onMouseLeave={() => onActive(null)}
-    >
-      <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.18" />
-          <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
+    <div className="chart-frame">
+      <svg
+        className="cpi-chart"
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={ariaLabel}
+        onMouseLeave={() => onActive(null)}
+      >
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--brand-800)" stopOpacity="0.1" />
+            <stop offset="100%" stopColor="var(--brand-800)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
 
-      {/* ציר בסיס — קו שיער נסוג, רציף ולא מקווקו */}
-      <line
-        x1={PAD.left}
-        y1={PAD.top + plotH}
-        x2={W - PAD.right}
-        y2={PAD.top + plotH}
-        className="cpi-axis"
-      />
+        {/* רשת אופקית נסוגה — קנה מידה בלי להתחרות בקו הנתונים */}
+        {Array.from({ length: GRID_LINES }, (_, i) => {
+          const gy = PAD.top + (plotH / GRID_LINES) * i;
+          return (
+            <line
+              key={`g${i}`}
+              x1={PAD.left}
+              y1={gy}
+              x2={W - PAD.right}
+              y2={gy}
+              className="cpi-grid"
+              vectorEffect="non-scaling-stroke"
+            />
+          );
+        })}
 
-      <path d={area} fill={`url(#${gradId})`} />
-      <path d={line} className="cpi-line" />
-
-      {active !== null && (
         <line
-          x1={x(active)}
-          y1={PAD.top}
-          x2={x(active)}
+          x1={PAD.left}
+          y1={PAD.top + plotH}
+          x2={W - PAD.right}
           y2={PAD.top + plotH}
-          className="cpi-cross"
+          className="cpi-axis"
+          vectorEffect="non-scaling-stroke"
         />
-      )}
 
-      {data.map((d, i) => (
-        <circle
-          key={d.key}
-          cx={x(i)}
-          cy={y(d.value)}
-          r={active === i ? 4.5 : 2.5}
-          className={`cpi-dot${active === i ? " on" : ""}`}
-        />
-      ))}
+        <path d={area} fill={`url(#${gradId})`} />
+        <path d={line} className="cpi-line" vectorEffect="non-scaling-stroke" />
 
-      {/* תוויות קצה בלבד — לא מספר על כל נקודה.
-          עיגון middle: המשמעות שלו אינה מתהפכת תחת direction: rtl */}
-      <text x={x(0) - 26} y={H - 6} className="cpi-tick" textAnchor="middle">
-        {first.tick}
-      </text>
-      <text x={x(data.length - 1) + 26} y={H - 6} className="cpi-tick" textAnchor="middle">
-        {last.tick}
-      </text>
+        {active !== null && (
+          <line
+            x1={x(active)}
+            y1={PAD.top}
+            x2={x(active)}
+            y2={PAD.top + plotH}
+            className="cpi-cross"
+            vectorEffect="non-scaling-stroke"
+          />
+        )}
 
-      {/* שטח פגיעה רחב לכל נקודה — הצבעה בקירוב מספיקה */}
-      {data.map((d, i) => (
-        <rect
-          key={`hit-${d.key}`}
-          x={x(i) - plotW / data.length / 2}
-          y={0}
-          width={plotW / data.length}
-          height={H}
-          fill="transparent"
-          tabIndex={0}
-          role="button"
-          aria-label={`${d.label}: ${d.display}`}
-          onMouseEnter={() => onActive(i)}
-          onFocus={() => onActive(i)}
-          onBlur={() => onActive(null)}
-          onTouchStart={() => onActive(i)}
-        />
-      ))}
-    </svg>
+        {data.map((d, i) => (
+          <circle
+            key={d.key}
+            cx={x(i)}
+            cy={y(d.value)}
+            r={active === i ? 5 : 3}
+            className={`cpi-dot${active === i ? " on" : ""}`}
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
+
+        {/* שטח פגיעה רחב לכל נקודה — הצבעה בקירוב מספיקה */}
+        {data.map((d, i) => (
+          <rect
+            key={`hit-${d.key}`}
+            x={x(i) - plotW / data.length / 2}
+            y={0}
+            width={plotW / data.length}
+            height={H}
+            fill="transparent"
+            tabIndex={0}
+            role="button"
+            aria-label={`${d.label}: ${d.display}`}
+            onMouseEnter={() => onActive(i)}
+            onFocus={() => onActive(i)}
+            onBlur={() => onActive(null)}
+            onTouchStart={() => onActive(i)}
+          />
+        ))}
+      </svg>
+
+      {/* תוויות קצה בלבד — לא מספר על כל נקודה */}
+      <div className="chart-ticks" aria-hidden>
+        <span>{last.tick}</span>
+        <span>{first.tick}</span>
+      </div>
+    </div>
   );
 }

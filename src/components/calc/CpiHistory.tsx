@@ -3,11 +3,12 @@
 import { useMemo, useState } from "react";
 import { fmtNum, round2 } from "@/lib/finance";
 import { hebrewMonth, type CpiReading } from "@/lib/liveData";
+import { ICON_STROKE, IconDown, IconFlat, IconUp } from "@/components/ui/icons";
 import HistoryChart, { type ChartPoint } from "./HistoryChart";
 
 const fmtIdx = (v: number) => fmtNum(round2(v));
 
-/** ↑ עלייה · ↓ ירידה · — ללא שינוי */
+/** עלייה · ירידה · ללא שינוי — אייקון וצבע, לעולם לא צבע לבדו */
 export function ChangeMark({
   pct,
   suffix,
@@ -20,11 +21,11 @@ export function ChangeMark({
   if (pct === undefined) return null;
   const r = round2(pct);
   const dir = r > 0 ? "up" : r < 0 ? "down" : "flat";
-  const arrow = dir === "up" ? "↑" : dir === "down" ? "↓" : "—";
+  const Arrow = dir === "up" ? IconUp : dir === "down" ? IconDown : IconFlat;
   return (
     <span className={`cpi-change cpi-${dir} ${className}`.trim()}>
-      <span aria-hidden>{arrow}</span> {fmtNum(Math.abs(r))}%
-      {suffix ? ` ${suffix}` : ""}
+      <Arrow size={13} strokeWidth={ICON_STROKE} aria-hidden />
+      {fmtNum(Math.abs(r))}%{suffix ? ` ${suffix}` : ""}
     </span>
   );
 }

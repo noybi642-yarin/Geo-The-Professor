@@ -10,6 +10,7 @@ import {
   type ScheduleRow,
 } from "@/lib/finance";
 import { Modal, useToast } from "./shared";
+import { ICON_SM, ICON_STROKE, IconBalloon, IconCopyToClient, IconPrint, IconSchedule } from "@/components/ui/icons";
 
 /**
  * לוח סילוקין משותף לכל המחשבונים: טבלה עם שורת סיכום,
@@ -61,17 +62,17 @@ export default function ScheduleModal({
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    notify("קובץ CSV ירד ✓");
+    notify("קובץ CSV ירד");
   };
 
   const cell = (r: ScheduleRow, key: (typeof cols)[number]["key"]) => {
-    if (key === "month") return r.isBalloon ? "🎈 בלון" : r.month;
+    if (key === "month") return r.isBalloon ? "בלון" : r.month;
     const v = r[key];
     return v === undefined ? "—" : fmtMoney(v);
   };
 
   return (
-    <Modal title="📅 לוח סילוקין" onClose={onClose} wide>
+    <Modal title="לוח סילוקין" icon={IconSchedule} onClose={onClose} wide>
       <div className="schedule-meta">
         {meta.map((m) => (
           <span key={m.label}>
@@ -82,19 +83,21 @@ export default function ScheduleModal({
 
       <div className="modal-actions">
         <button type="button" className="mini-btn" onClick={() => window.print()}>
-          🖨️ הדפסה
+          <IconPrint size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+          הדפסה
         </button>
         <button type="button" className="mini-btn" onClick={downloadCsv}>
-          ⬇️ הורדה כ-CSV
+          הורדה כ-CSV
         </button>
         <button
           type="button"
           className="mini-btn"
           onClick={async () => {
-            if (await copyText(summaryText)) notify("הסיכום הועתק ✓");
+            if (await copyText(summaryText)) notify("הסיכום הועתק");
           }}
         >
-          📋 העתקת סיכום
+          <IconCopyToClient size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+          העתקת סיכום
         </button>
       </div>
 
