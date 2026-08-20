@@ -3,23 +3,24 @@
 import { useMemo, useState } from "react";
 import { fmtNum, fmtPct, round2 } from "@/lib/finance";
 import { calcPrime, PRIME_SPREAD, type BoiReading } from "@/lib/liveData";
+import { ICON_STROKE, IconDown, IconFlat, IconUp } from "@/components/ui/icons";
 import HistoryChart, { type ChartPoint } from "./HistoryChart";
 
 const fmtRate = (v: number) => fmtPct(round2(v));
 
 /**
  * שינוי הריבית ב**נקודות אחוז** — לא באחוזים.
- * ↑ עלייה · ↓ ירידה · — ללא שינוי
+ * אייקון וצבע יחד, כדי שהכיוון לא יסתמך על צבע בלבד.
  */
 export function PtsMark({ pts, suffix }: { pts: number | undefined; suffix?: string }) {
   if (pts === undefined) return null;
   const r = round2(pts);
   const dir = r > 0 ? "up" : r < 0 ? "down" : "flat";
-  const arrow = dir === "up" ? "↑" : dir === "down" ? "↓" : "—";
+  const Arrow = dir === "up" ? IconUp : dir === "down" ? IconDown : IconFlat;
   return (
     <span className={`cpi-change cpi-${dir}`}>
-      <span aria-hidden>{arrow}</span> {fmtNum(Math.abs(r))} נק׳
-      {suffix ? ` ${suffix}` : ""}
+      <Arrow size={13} strokeWidth={ICON_STROKE} aria-hidden />
+      {fmtNum(Math.abs(r))} נק׳{suffix ? ` ${suffix}` : ""}
     </span>
   );
 }

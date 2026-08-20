@@ -22,6 +22,7 @@ import {
   usePersistentState,
   useToast,
 } from "./shared";
+import { ICON_SM, ICON_STROKE, IconInfo, IconResults, IconSetupFee, IconStar } from "@/components/ui/icons";
 
 interface FeeForm {
   track: TrackId;
@@ -102,13 +103,16 @@ export default function SetupFeeCalc() {
     } else {
       lines.push("💳 תשלום חד-פעמי בתחילת העסקה");
     }
-    if (await copyText(lines.join("\n"))) notify("הועתק ✓");
+    if (await copyText(lines.join("\n"))) notify("הועתק");
   };
 
   return (
     <div className="calc-screen">
       <section className="panel">
-        <h2 className="panel-title">🧾 חישוב עמלת ההקמה</h2>
+        <h2 className="panel-title">
+            <IconSetupFee size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+            חישוב עמלת ההקמה
+          </h2>
 
         <div className="track-tabs" role="tablist" aria-label="מסלול">
           {TRACK_ORDER.map((id) => (
@@ -120,7 +124,7 @@ export default function SetupFeeCalc() {
               className={`track-tab${track === id ? " on" : ""}${TRACKS[id].star ? " star" : ""}`}
               onClick={() => set({ track: id })}
             >
-              {TRACKS[id].star ? "⭐ " : ""}
+              
               {TRACKS[id].name}
             </button>
           ))}
@@ -213,7 +217,10 @@ export default function SetupFeeCalc() {
       </section>
 
       <section className="panel" id="fee-results">
-        <h2 className="panel-title">💙 תוצאות</h2>
+        <h2 className="panel-title">
+            <IconResults size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+            תוצאות
+          </h2>
         {ok ? (
           <>
             {spread ? (
@@ -293,7 +300,7 @@ export default function SetupFeeCalc() {
         onCopy={copy}
         onClear={() => {
           setF({ ...INITIAL, track: f.track });
-          notify("נוקה ✨");
+          notify("נוקה");
         }}
       />
     </div>

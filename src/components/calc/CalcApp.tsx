@@ -11,7 +11,21 @@ import {
   type ProductType,
   type Settings,
 } from "@/lib/finance";
-import { Modal, ToastContext } from "./shared";
+import AppShell from "@/components/shell/AppShell";
+import {
+  DATA_ROUTES,
+  KNOWLEDGE_SCREEN,
+  PRIMARY_CALCS,
+  QUICK_CALCS,
+  TOOL_SCREENS,
+  getScreen,
+  sectionLabelFor,
+  type ScreenId,
+  type ScreenMeta,
+} from "@/components/shell/screens";
+import { ICON_MD, ICON_SM, ICON_STROKE, IconSettings } from "@/components/ui/icons";
+import Link from "next/link";
+import { Modal, PageHead, ToastContext } from "./shared";
 import LoanCalc from "./LoanCalc";
 import BalloonSpreadCalc from "./BalloonSpreadCalc";
 import IndexCalc from "./IndexCalc";
@@ -22,51 +36,41 @@ import SubsidyCalc from "./SubsidyCalc";
 import TracksInfo from "./TracksInfo";
 import { BalloonCalc, DownCalc, FinPctCalc, InterestCalc } from "./SimpleCalcs";
 
-type CalcId =
-  | "loan"
-  | "subsidy"
-  | "index"
-  | "spread"
-  | "tracks"
-  | "knowledge"
-  | "interest"
-  | "finpct"
-  | "down"
-  | "balloon"
-  | "setupfee";
-
-interface CalcMeta {
-  id: CalcId;
-  icon: string;
-  title: string;
-  desc: string;
-}
-
-/** ארבעת האזורים המרכזיים */
-const MAIN_CALCS: CalcMeta[] = [
-  { id: "loan", icon: "🚗", title: "בניית עסקת מימון", desc: "מסלול, ריבית, בלון ועמלת הקמה — עם לוח סילוקין" },
-  { id: "subsidy", icon: "🤑", title: "מחשבון סבסודים", desc: "כמה עולה לסבסד ריבית, ומה מקבלים מתקציב נתון" },
-  { id: "index", icon: "📊", title: "עדכון תשלום לפי מדד", desc: "עדכון החזר לפי ערך מדד, אחוזים או נקודות" },
-  { id: "spread", icon: "🎈", title: "פריסת יתרת בלון", desc: "המשך תשלומים על יתרת הבלון בסוף העסקה" },
-  { id: "tracks", icon: "🗂️", title: "הכרת המסלולים", desc: "Drive, Extra Lease, Fix ו-Express — טווחים ותנאים" },
-  { id: "knowledge", icon: "📚", title: "מרכז הידע", desc: "ספריית ידע מקצועית — מתחילה מחוזה המימון" },
-];
-
-/** מחשבונים מהירים משלימים */
-const QUICK_CALCS: CalcMeta[] = [
-  { id: "interest", icon: "💰", title: "מחשבון ריבית", desc: "כמה ריבית וכמה קרן ישולמו בהלוואה" },
-  { id: "finpct", icon: "📈", title: "אחוז מימון", desc: "אחוז המימון לפי מחיר הרכב והמקדמה" },
-  { id: "down", icon: "💵", title: "מחשבון מקדמה", desc: "כמה מקדמה צריך לפי אחוז המימון" },
-  { id: "balloon", icon: "📊", title: "מחשבון בלון", desc: "סכום הבלון וההלוואה לאחר המקדמה" },
-  { id: "setupfee", icon: "🧾", title: "עמלת הקמה", desc: "חישוב העמלה ופריסתה לתשלומים בריבית 9.5%" },
-];
-
-const CALCS: CalcMeta[] = [...MAIN_CALCS, ...QUICK_CALCS];
-
 const SETTINGS_KEY = "sn.settings.v1";
 
+/** אריח ניווט אל מסך קיים */
+function ScreenTile({ meta, onOpen }: { meta: ScreenMeta; onOpen: () => void }) {
+  const Icon = meta.icon;
+  return (
+    <button type="button" className="sn-tile" onClick={onOpen}>
+      <span className="tile-icon" aria-hidden>
+        <Icon size={ICON_MD} strokeWidth={ICON_STROKE} />
+      </span>
+      <span className="tile-body">
+        <span className="tile-title">{meta.title}</span>
+        <span className="tile-desc">{meta.desc}</span>
+      </span>
+    </button>
+  );
+}
+
+/** אריח ניווט אל נתיב אמיתי */
+function RouteTile({ href, icon: Icon, title, desc }: (typeof DATA_ROUTES)[number]) {
+  return (
+    <Link href={href} className="sn-tile">
+      <span className="tile-icon" aria-hidden>
+        <Icon size={ICON_MD} strokeWidth={ICON_STROKE} />
+      </span>
+      <span className="tile-body">
+        <span className="tile-title">{title}</span>
+        <span className="tile-desc">{desc}</span>
+      </span>
+    </Link>
+  );
+}
+
 export default function CalcApp() {
-  const [screen, setScreen] = useState<CalcId | null>(null);
+  const [screen, setScreen] = useState<ScreenId>("home");
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
   const [toast, setToast] = useState<{ msg: string; key: number } | null>(null);
@@ -81,6 +85,15 @@ export default function CalcApp() {
     settingsLoaded.current = true;
   }, []);
 
+  // מעבר ישיר למסך מתוך סרגל הצד של עמוד אחר (?calc=...).
+  // נקרא מה-URL ולא דרך useSearchParams, כדי שהעמוד יישאר סטטי.
+  useEffect(() => {
+    try {
+      const want = new URLSearchParams(window.location.search).get("calc");
+      if (want && getScreen(want as ScreenId).id === want) setScreen(want as ScreenId);
+    } catch {}
+  }, []);
+
   useEffect(() => {
     if (!settingsLoaded.current) return;
     try {
@@ -88,13 +101,18 @@ export default function CalcApp() {
     } catch {}
   }, [settings]);
 
+  // מעבר בין מסכים מחזיר לראש העמוד — אחרת נוחתים באמצע תוכן
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [screen]);
+
   const notify = useCallback((msg: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast({ msg, key: Date.now() });
     toastTimer.current = setTimeout(() => setToast(null), 1800);
   }, []);
 
-  const accent = ACCENTS[settings.accent] ?? ACCENTS.blue;
+  const accent = ACCENTS[settings.accent] ?? ACCENTS.forest;
   const accentVars = {
     "--accent": accent.accent,
     "--accent-dark": accent.dark,
@@ -102,83 +120,143 @@ export default function CalcApp() {
     "--accent-ring": accent.ring,
   } as CSSProperties;
 
-  const active = CALCS.find((c) => c.id === screen);
+  const meta = getScreen(screen);
+  const isIndex = screen === "home" || screen === "calculators" || screen === "tools";
 
   return (
     <ToastContext.Provider value={notify}>
       <div className="sn-app" style={accentVars}>
-        <header className="sn-header">
-          <div className="sn-header-inner">
-            <div className="sn-header-row">
-              {active ? (
-                <button type="button" className="head-btn" onClick={() => setScreen(null)} aria-label="חזרה">
-                  → חזרה
-                </button>
-              ) : (
-                <span className="head-hello">היי נוי 👋</span>
-              )}
-              <button
-                type="button"
-                className="head-btn"
-                onClick={() => setShowSettings(true)}
-                aria-label="הגדרות"
-              >
-                ⚙️
-              </button>
-            </div>
-            <h1 className="sn-title">
-              {active ? `${active.icon} ${active.title}` : "שלום נוי"}
-            </h1>
-            <p className="sn-subtitle">{active ? active.desc : "בואי נחשב יחד 💙"}</p>
-          </div>
-        </header>
+        <AppShell
+          activeScreen={screen}
+          onNavigate={setScreen}
+          onOpenSettings={() => setShowSettings(true)}
+          title={sectionLabelFor(screen)}
+          actions={
+            <button
+              type="button"
+              className="head-btn"
+              onClick={() => setShowSettings(true)}
+            >
+              <IconSettings size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+              הגדרות
+            </button>
+          }
+        >
+          {!isIndex && <PageHead icon={meta.icon} title={meta.title} sub={meta.desc} />}
 
-        <main className="sn-container">
-          {!active && (
-            <div key="home">
+          {screen === "home" && (
+            <div className="calc-screen">
+              <PageHead
+                title="שלום נוי — בואי נחשב יחד"
+                sub="נתוני שוק עדכניים, מחשבוני מימון וספריית הידע המקצועית"
+              />
               <LiveDataCard />
 
-              <div className="sn-grid main-grid">
-                {MAIN_CALCS.map((c, idx) => (
-                  <button
-                    type="button"
-                    key={c.id}
-                    className="sn-tile"
-                    style={{ animationDelay: `${idx * 45}ms` }}
-                    onClick={() => setScreen(c.id)}
-                  >
-                    <span className="tile-icon">{c.icon}</span>
-                    <span className="tile-title">{c.title}</span>
-                    <span className="tile-desc">{c.desc}</span>
-                  </button>
-                ))}
+              <div>
+                <h2 className="section-head">מחשבונים מרכזיים</h2>
+                <div className="sn-grid">
+                  {PRIMARY_CALCS.map((c) => (
+                    <ScreenTile key={c.id} meta={c} onOpen={() => setScreen(c.id)} />
+                  ))}
+                </div>
               </div>
 
-              <h2 className="section-head">מחשבונים מהירים</h2>
-              <div className="sn-grid">
-                {QUICK_CALCS.map((c, idx) => (
+              <div>
+                <h2 className="section-head">ידע מקצועי</h2>
+                <div className="sn-grid grid-fit">
+                  <ScreenTile
+                    meta={KNOWLEDGE_SCREEN}
+                    onOpen={() => setScreen(KNOWLEDGE_SCREEN.id)}
+                  />
+                  {TOOL_SCREENS.map((t) => (
+                    <ScreenTile key={t.id} meta={t} onOpen={() => setScreen(t.id)} />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h2 className="section-head">מחשבונים מהירים</h2>
+                <div className="sn-grid grid-compact">
+                  {QUICK_CALCS.map((c) => (
+                    <ScreenTile key={c.id} meta={c} onOpen={() => setScreen(c.id)} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {screen === "calculators" && (
+            <div className="calc-screen">
+              <PageHead
+                icon={meta.icon}
+                title="מחשבונים"
+                sub="כל מחשבוני המימון במקום אחד"
+              />
+              <div>
+                <h2 className="section-head">מחשבונים מרכזיים</h2>
+                <div className="sn-grid">
+                  {PRIMARY_CALCS.map((c) => (
+                    <ScreenTile key={c.id} meta={c} onOpen={() => setScreen(c.id)} />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h2 className="section-head">מחשבונים מהירים</h2>
+                <div className="sn-grid grid-compact">
+                  {QUICK_CALCS.map((c) => (
+                    <ScreenTile key={c.id} meta={c} onOpen={() => setScreen(c.id)} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {screen === "tools" && (
+            <div className="calc-screen">
+              <PageHead
+                icon={meta.icon}
+                title="כלים ל-BDM"
+                sub="מסלולי מימון, היסטוריית נתונים רשמיים והגדרות החישוב"
+              />
+              <div>
+                <h2 className="section-head">מידע מקצועי</h2>
+                <div className="sn-grid grid-fit">
+                  <ScreenTile
+                    meta={KNOWLEDGE_SCREEN}
+                    onOpen={() => setScreen(KNOWLEDGE_SCREEN.id)}
+                  />
+                  {TOOL_SCREENS.map((t) => (
+                    <ScreenTile key={t.id} meta={t} onOpen={() => setScreen(t.id)} />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h2 className="section-head">נתונים רשמיים</h2>
+                <div className="sn-grid grid-fit">
+                  {DATA_ROUTES.map((r) => (
+                    <RouteTile key={r.href} {...r} />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h2 className="section-head">הגדרות</h2>
+                <div className="sn-grid grid-fit">
                   <button
                     type="button"
-                    key={c.id}
                     className="sn-tile"
-                    style={{ animationDelay: `${(MAIN_CALCS.length + idx) * 45}ms` }}
-                    onClick={() => setScreen(c.id)}
+                    onClick={() => setShowSettings(true)}
                   >
-                    <span className="tile-icon">{c.icon}</span>
-                    <span className="tile-title">{c.title}</span>
-                    <span className="tile-desc">{c.desc}</span>
+                    <span className="tile-icon" aria-hidden>
+                      <IconSettings size={ICON_MD} strokeWidth={ICON_STROKE} />
+                    </span>
+                    <span className="tile-body">
+                      <span className="tile-title">הגדרות החישוב</span>
+                      <span className="tile-desc">
+                        עמלת הקמה, ריבית ברירת מחדל, פריים, מדד ואחוזי מימון
+                      </span>
+                    </span>
                   </button>
-                ))}
-                <button
-                  type="button"
-                  className="sn-tile tile-settings"
-                  style={{ animationDelay: `${CALCS.length * 45}ms` }}
-                  onClick={() => setShowSettings(true)}
-                >
-                  <span className="tile-icon">⚙️</span>
-                  <span className="tile-title">הגדרות</span>
-                  <span className="tile-desc">עמלת הקמה, ריבית, צבעים ואחוזי מימון</span>
-                </button>
+                </div>
               </div>
             </div>
           )}
@@ -194,9 +272,7 @@ export default function CalcApp() {
           {screen === "down" && <DownCalc settings={settings} />}
           {screen === "balloon" && <BalloonCalc />}
           {screen === "setupfee" && <SetupFeeCalc />}
-        </main>
-
-        <footer className="sn-footer">נבנה באהבה עבור נוי 💙</footer>
+        </AppShell>
 
         {showSettings && (
           <SettingsModal
@@ -217,7 +293,7 @@ export default function CalcApp() {
   );
 }
 
-// ─── ⚙️ הגדרות ─────────────────────────────────────────────────
+// ─── הגדרות ────────────────────────────────────────────────────
 
 function SettingsModal({
   settings,
@@ -278,7 +354,7 @@ function SettingsModal({
     ).sort((a, b) => a - b);
 
   return (
-    <Modal title="⚙️ הגדרות" onClose={onClose}>
+    <Modal title="הגדרות" icon={IconSettings} onClose={onClose}>
       <div className="settings">
         {numField("עמלת הקמה (ברירת מחדל)", fee, setFee, "fee", "₪")}
         {numField("ריבית שנתית (ברירת מחדל)", rate, setRate, "defaultRate", "%")}
@@ -334,14 +410,14 @@ function SettingsModal({
         </div>
 
         <div className="field">
-          <label className="field-label">צבעי המערכת</label>
+          <label className="field-label">גוון הממשק</label>
           <div className="swatches">
             {Object.entries(ACCENTS).map(([id, a]) => (
               <button
                 type="button"
                 key={id}
                 className={`swatch${settings.accent === id ? " on" : ""}`}
-                style={{ background: `linear-gradient(135deg, ${a.dark}, ${a.accent})` }}
+                style={{ background: a.accent }}
                 title={a.name}
                 aria-label={a.name}
                 onClick={() => commit({ accent: id })}
@@ -380,7 +456,7 @@ function SettingsModal({
             setPrimeMargin(toInput(DEFAULT_SETTINGS.primeMargin));
             setCpi(toInput(DEFAULT_SETTINGS.defaultCpi));
             setSpreadRate(toInput(DEFAULT_SETTINGS.spreadRate));
-            notify("ההגדרות אופסו ✨");
+            notify("ההגדרות אופסו");
           }}
         >
           שחזור ברירות מחדל

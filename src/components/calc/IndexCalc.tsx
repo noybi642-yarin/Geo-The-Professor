@@ -10,6 +10,7 @@ import {
   type IndexChangeKind,
 } from "@/lib/finance";
 import { ActionBar, NumField, ResultHero, ResultRow, usePersistentState, useToast } from "./shared";
+import { ICON_SM, ICON_STROKE, IconAdd, IconBalloonSpread, IconIndex, IconInfo, IconRemove, IconResults, IconSchedule } from "@/components/ui/icons";
 
 const INDEX_DISCLAIMER =
   "החישוב מבוסס על הנתונים שהוזנו. החיוב בפועל תלוי בתנאי הסכם המימון ובמדד הידוע במועד החיוב.";
@@ -122,13 +123,16 @@ export default function IndexCalc() {
       "―――――――――――――――",
       `ℹ️ ${INDEX_DISCLAIMER}`,
     ].filter(Boolean);
-    if (await copyText(lines.join("\n"))) notify("הועתק ✓");
+    if (await copyText(lines.join("\n"))) notify("הועתק");
   };
 
   return (
     <div className="calc-screen">
       <section className="panel">
-        <h2 className="panel-title">📊 נתוני הבסיס</h2>
+        <h2 className="panel-title">
+            <IconIndex size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+            נתוני הבסיס
+          </h2>
         <div className="fields-grid">
           <NumField
             label="מדד בסיס ביום העמדת העסקה"
@@ -158,7 +162,10 @@ export default function IndexCalc() {
       </section>
 
       <section className="panel">
-        <h2 className="panel-title">🔁 שינויי מדד</h2>
+        <h2 className="panel-title">
+            <IconBalloonSpread size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+            שינויי מדד
+          </h2>
 
         {f.rows.map((r, i) => (
           <div className="index-row" key={i}>
@@ -173,7 +180,7 @@ export default function IndexCalc() {
                   aria-label={`הסרת שורה ${i + 1}`}
                   onClick={() => removeRow(i)}
                 >
-                  ✕
+                  <IconRemove size={14} strokeWidth={ICON_STROKE} aria-hidden />
                 </button>
               )}
             </div>
@@ -222,7 +229,10 @@ export default function IndexCalc() {
       </section>
 
       <section className="panel" id="index-results">
-        <h2 className="panel-title">💙 תוצאות</h2>
+        <h2 className="panel-title">
+            <IconResults size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+            תוצאות
+          </h2>
         {res.ok ? (
           <>
             <ResultHero
@@ -253,7 +263,7 @@ export default function IndexCalc() {
 
             {multi && (
               <div className="before-after">
-                <h3 className="subhead">🗓️ מעקב חודשי מצטבר</h3>
+                <h3 className="subhead">מעקב חודשי מצטבר</h3>
                 <div className="table-wrap">
                   <table className="schedule">
                     <thead>
@@ -290,10 +300,13 @@ export default function IndexCalc() {
               </div>
             )}
 
-            <div className="note">ℹ️ {INDEX_DISCLAIMER}</div>
+            <div className="note">
+              <IconInfo size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+              {INDEX_DISCLAIMER}
+            </div>
           </>
         ) : (
-          <div className="empty-note">{res.error ?? "הזיני נתונים ונחשב יחד 💙"}</div>
+          <div className="empty-note">{res.error ?? "הזיני נתונים כדי לחשב"}</div>
         )}
       </section>
 
@@ -306,7 +319,7 @@ export default function IndexCalc() {
         onCopy={copyForClient}
         onClear={() => {
           setF({ ...INITIAL, rows: [{ kind: "value", value: "" }] });
-          notify("נוקה ✨");
+          notify("נוקה");
         }}
       />
     </div>

@@ -11,7 +11,46 @@ import {
   type KnowledgeSource,
 } from "@/lib/knowledge/index.ts";
 import { copyText } from "@/lib/finance";
+import {
+  ICON_MD,
+  ICON_SM,
+  ICON_STROKE,
+  IconBack,
+  IconClientDocs,
+  IconContract,
+  IconCopyToClient,
+  IconInfo,
+  IconKnowledge,
+  IconOpenBanking,
+  IconSearch,
+  IconStar,
+  type LucideIcon,
+} from "@/components/ui/icons";
 import { useToast } from "./shared";
+
+/**
+ * אייקון לכל מקור ולכל פריט. הנתונים עצמם אינם נוגעים בעיצוב —
+ * המיפוי יושב כאן, ולכן קובצי הידע נשארים תוכן טהור.
+ */
+const SOURCE_ICONS: Record<string, LucideIcon> = {
+  "finance-contract": IconContract,
+  "client-documents": IconClientDocs,
+};
+
+const sourceIcon = (id: string): LucideIcon => SOURCE_ICONS[id] ?? IconKnowledge;
+
+/**
+ * קיצורי חיפוש. כל מונח כאן נבדק ומחזיר תוצאות מהתוכן הקיים —
+ * אלה אינן קטגוריות חדשות אלא כניסות מהירות לחיפוש הרגיל.
+ */
+const COMMON_SEARCHES = [
+  "פירעון מוקדם",
+  "בנקאות פתוחה",
+  "משכון",
+  "עמלת הקמה",
+  "ריבית פיגורים",
+  "בלון",
+];
 
 /** תקציר בשורה אחת של מה שהמדרגה דורשת — לתצוגה מקדימה בכרטיס */
 function tierPreview(tier: DocTier | undefined): string | null {
@@ -54,18 +93,32 @@ export default function KnowledgeCenter() {
     return (
       <div className="calc-screen">
         <section className="panel">
-          <h2 className="panel-title">🔍 חיפוש מהיר</h2>
-          <div className="field-box">
+          <label className="kb-searchbar">
+            <IconSearch size={ICON_MD} strokeWidth={ICON_STROKE} aria-hidden />
             <input
               type="search"
               className="kb-search"
               value={homeQuery}
-              placeholder="עוסק מורשה, בנקאות פתוחה, פירעון מוקדם…"
+              placeholder="חיפוש במרכז הידע"
               onChange={(e) => setHomeQuery(e.target.value)}
               aria-label="חיפוש בכל מרכז הידע"
             />
-          </div>
-          <div className="field-hint">החיפוש עובר על כל מקורות הידע</div>
+          </label>
+          {!homeQuery && (
+            <div className="kb-suggest">
+              <span className="kb-suggest-label">חיפושים נפוצים</span>
+              {COMMON_SEARCHES.map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  className="chip"
+                  onClick={() => setHomeQuery(q)}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
           {homeQuery && globalHits.length === 0 && (
             <div className="kb-count">לא נמצאו תוצאות עבור ״{homeQuery}״</div>
           )}
@@ -75,7 +128,11 @@ export default function KnowledgeCenter() {
           ? globalHits.map(({ source: s, hits }) => (
               <section className="panel" key={s.id}>
                 <h2 className="panel-title">
-                  {s.icon} {s.title} · {hits.length} תוצאות
+                  {(() => {
+                    const SIcon = sourceIcon(s.id);
+                    return <SIcon size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />;
+                  })()}
+                  {s.title} · {hits.length} תוצאות
                 </h2>
                 <div className="kb-grid">
                   {hits.map(({ item, matchedLines, matchedTierId }, idx) => {
@@ -88,9 +145,7 @@ export default function KnowledgeCenter() {
                         style={{ animationDelay: `${Math.min(idx, 12) * 30}ms` }}
                         onClick={() => open(s.id, item.id, matchedTierId)}
                       >
-                        <span className="kb-card-title">
-                          {item.icon} {item.title}
-                        </span>
+                        <span className="kb-card-title">{item.title}</span>
                         {/* המדרגה שאליה החיפוש מוביל — כדי שיהיה ברור מראש */}
                         {tier && <span className="kb-card-tier">{tier.label}</span>}
                         <span className="kb-card-preview">
@@ -106,20 +161,26 @@ export default function KnowledgeCenter() {
               </section>
             ))
           : !homeQuery && (
-              <div className="sn-grid">
-                {KNOWLEDGE_SOURCES.map((s, idx) => (
-                  <button
-                    type="button"
-                    key={s.id}
-                    className="sn-tile"
-                    style={{ animationDelay: `${idx * 45}ms` }}
-                    onClick={() => setOpenSource(s.id)}
-                  >
-                    <span className="tile-icon">{s.icon}</span>
-                    <span className="tile-title">{s.title}</span>
-                    <span className="tile-desc">{s.desc}</span>
-                  </button>
-                ))}
+              <div className="sn-grid grid-fit">
+                {KNOWLEDGE_SOURCES.map((s) => {
+                  const SIcon = sourceIcon(s.id);
+                  return (
+                    <button
+                      type="button"
+                      key={s.id}
+                      className="sn-tile"
+                      onClick={() => setOpenSource(s.id)}
+                    >
+                      <span className="tile-icon" aria-hidden>
+                        <SIcon size={ICON_MD} strokeWidth={ICON_STROKE} />
+                      </span>
+                      <span className="tile-body">
+                        <span className="tile-title">{s.title}</span>
+                        <span className="tile-desc">{s.desc}</span>
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
       </div>
@@ -195,21 +256,25 @@ function TabsView({
       });
       if (g.footnote) lines.push(`— ${g.footnote}`);
     }
-    if (await copyText(lines.join("\n"))) notify("הרשימה הועתקה ✓");
+    if (await copyText(lines.join("\n"))) notify("הרשימה הועתקה");
   };
 
   return (
     <div className="calc-screen">
       {onBack && (
         <button type="button" className="btn btn-ghost kb-back" onClick={onBack}>
-          → חזרה למרכז הידע
+          <IconBack size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+          חזרה למרכז הידע
         </button>
       )}
 
       {/* כלל רוחבי — נכון לכל סוגי הלקוחות, ולכן מוצג פעם אחת */}
       {source.intro && (
         <section className="panel kb-intro">
-          <h2 className="panel-title">🔓 {source.intro.title}</h2>
+          <h2 className="panel-title">
+            <IconOpenBanking size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+            {source.intro.title}
+          </h2>
           {source.intro.lines.map((line, i) => (
             <p className="kb-intro-line" key={i}>
               {line}
@@ -229,7 +294,7 @@ function TabsView({
               className={`track-tab${active === it.id ? " on" : ""}`}
               onClick={() => selectItem(it.id)}
             >
-              {it.icon} {it.title}
+              {it.title}
             </button>
           ))}
         </div>
@@ -255,7 +320,7 @@ function TabsView({
 
       <section className="panel" key={`${item.id}-${tier?.id ?? "base"}`}>
         <h2 className="kb-item-title">
-          {item.icon} {item.title}
+          {item.title}
         </h2>
 
         {tier && tiers.length === 1 && <div className="kb-tier-label">{tier.label}</div>}
@@ -296,7 +361,11 @@ function TabsView({
                     <div className={`doc-option${o.preferred ? " preferred" : ""}`}>
                       <div className="doc-option-label">
                         {o.label}
-                        {o.preferred && <span className="doc-star">⭐</span>}
+                        {o.preferred && (
+                          <span className="doc-star" aria-hidden>
+                            <IconStar size={13} strokeWidth={ICON_STROKE} />
+                          </span>
+                        )}
                       </div>
                       <ul className="doc-list">
                         {o.items.map((x) => (
@@ -309,17 +378,26 @@ function TabsView({
               </div>
             )}
 
-            {g.footnote && <div className="doc-footnote">ℹ️ {g.footnote}</div>}
+            {g.footnote && (
+              <div className="doc-footnote">
+                <IconInfo size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+                {g.footnote}
+              </div>
+            )}
           </div>
         ))}
 
         <div className="modal-actions kb-actions">
           <button type="button" className="mini-btn" onClick={copyList}>
-            📋 העתקת הרשימה
+            <IconCopyToClient size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+            העתקת הרשימה
           </button>
         </div>
 
-        <div className="note kb-disclaimer">ℹ️ {source.disclaimer}</div>
+        <div className="note kb-disclaimer">
+          <IconInfo size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+          {source.disclaimer}
+        </div>
       </section>
     </div>
   );
@@ -352,18 +430,18 @@ function SourceView({
   return (
     <div className="calc-screen">
       <section className="panel">
-        <h2 className="panel-title">🔍 חיפוש מהיר</h2>
-        <div className="field-box">
+        <label className="kb-searchbar">
+          <IconSearch size={ICON_MD} strokeWidth={ICON_STROKE} aria-hidden />
           <input
             type="search"
             className="kb-search"
             value={query}
-            placeholder="פירעון מוקדם, ביטוח, ריבית פיגורים, בלון…"
+            placeholder="חיפוש בחוזה המימון"
             onChange={(e) => setQuery(e.target.value)}
             aria-label="חיפוש במרכז הידע"
           />
-        </div>
-        <div className="field-hint">
+        </label>
+        <div className="field-hint" style={{ marginTop: 10 }}>
           החיפוש מוצא גם מילים דומות — ״ביטוח״ יאתר גם ״פוליסה״ ו״שעבוד פוליסה״
         </div>
         {query && (
@@ -373,7 +451,10 @@ function SourceView({
               : `לא נמצאו תוצאות עבור ״${query}״`}
           </div>
         )}
-        <div className="note kb-disclaimer">ℹ️ {source.disclaimer}</div>
+        <div className="note kb-disclaimer">
+          <IconInfo size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+          {source.disclaimer}
+        </div>
       </section>
 
       {hits.length > 0 && (
@@ -387,12 +468,12 @@ function SourceView({
               onClick={() => setOpenItem(it.id)}
             >
               <span className="kb-card-title">
-                {it.icon} {it.title}
+                {it.title}
               </span>
               <span className="kb-card-preview">
                 {(matchedLines.length ? matchedLines : it.summary)[0]}
               </span>
-              {it.note && <span className="kb-flag">⚠️ יש הערה לאימות</span>}
+              {it.note && <span className="kb-flag">יש הערה לאימות</span>}
             </button>
           ))}
         </div>
@@ -400,7 +481,8 @@ function SourceView({
 
       {onBack && (
         <button type="button" className="btn btn-ghost" onClick={onBack}>
-          → חזרה לרשימת המקורות
+          <IconBack size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+          חזרה לרשימת המקורות
         </button>
       )}
     </div>
@@ -423,21 +505,27 @@ function ItemView({
 
   const copySummary = async () => {
     const text = [`${item.icon} ${item.title}`, ...item.summary.map((s) => `• ${s}`)].join("\n");
-    if (await copyText(text)) notify("התקציר הועתק ✓");
+    if (await copyText(text)) notify("התקציר הועתק");
   };
 
   return (
     <div className="calc-screen">
       <button type="button" className="btn btn-ghost kb-back" onClick={onBack}>
-        → חזרה לקטגוריות
+        <IconBack size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+        חזרה לקטגוריות
       </button>
 
       <section className="panel">
         <h2 className="kb-item-title">
-          {item.icon} {item.title}
+          {item.title}
         </h2>
 
-        {item.note && <div className="alert alert-bdm kb-note">⚠️ {item.note}</div>}
+        {item.note && (
+          <div className="alert alert-bdm kb-note">
+            <IconInfo size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+            {item.note}
+          </div>
+        )}
 
         <ul className="kb-summary">
           {item.summary.map((line, i) => (
@@ -447,7 +535,8 @@ function ItemView({
 
         <div className="modal-actions kb-actions">
           <button type="button" className="mini-btn" onClick={copySummary}>
-            📋 העתקת התקציר
+            <IconCopyToClient size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+            העתקת התקציר
           </button>
           {(item.quotes?.length ?? 0) > 0 && (
             <button
@@ -456,7 +545,8 @@ function ItemView({
               aria-expanded={showSource}
               onClick={() => setShowSource((v) => !v)}
             >
-              📖 {showSource ? "הסתרת המקור" : "מקור בחוזה"}
+              <IconContract size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+              {showSource ? "הסתרת המקור" : "מקור בחוזה"}
             </button>
           )}
         </div>

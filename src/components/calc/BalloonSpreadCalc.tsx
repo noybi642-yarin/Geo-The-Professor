@@ -27,6 +27,7 @@ import {
   useToast,
 } from "./shared";
 import ScheduleModal from "./ScheduleModal";
+import { ICON_SM, ICON_STROKE, IconBalloonSpread, IconResults, IconSchedule } from "@/components/ui/icons";
 
 type SpreadMode = "months" | "payment";
 
@@ -127,7 +128,7 @@ export default function BalloonSpreadCalc({ settings }: { settings: Settings }) 
       "―――――――――――――――",
       summarySentence,
     ].filter(Boolean);
-    if (await copyText(lines.join("\n"))) notify("ההצעה הועתקה ✓");
+    if (await copyText(lines.join("\n"))) notify("ההצעה הועתקה");
   };
 
   const doCalc = () => {
@@ -139,13 +140,16 @@ export default function BalloonSpreadCalc({ settings }: { settings: Settings }) 
 
   const clear = () => {
     setF({ ...INITIAL, mode: f.mode });
-    notify("נוקה ✨");
+    notify("נוקה");
   };
 
   return (
     <div className="calc-screen">
       <section className="panel">
-        <h2 className="panel-title">🎈 פרטי הפריסה</h2>
+        <h2 className="panel-title">
+            <IconBalloonSpread size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+            פרטי הפריסה
+          </h2>
 
         <div className="prod-tabs" role="tablist" aria-label="שיטת חישוב">
           <button
@@ -271,13 +275,16 @@ export default function BalloonSpreadCalc({ settings }: { settings: Settings }) 
       </section>
 
       <section className="panel" id="spread-results">
-        <h2 className="panel-title">💙 תוצאות</h2>
+        <h2 className="panel-title">
+            <IconResults size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+            תוצאות
+          </h2>
         {res.ok && feeApplied ? (
           <>
             <div className="meta-badges">
-              <span className="badge">🧮 שפיצר</span>
-              <span className="badge">💯 {fmtPct(rateN)} שנתי</span>
-              <span className="badge">🗓️ {fmtNum(res.months)} תשלומים</span>
+              <span className="badge">שפיצר</span>
+              <span className="badge">{fmtPct(rateN)} שנתי</span>
+              <span className="badge">{fmtNum(res.months)} תשלומים</span>
             </div>
 
             {f.mode === "months" ? (
@@ -336,7 +343,7 @@ export default function BalloonSpreadCalc({ settings }: { settings: Settings }) 
             </div>
 
             <div className="before-after">
-              <h3 className="subhead">⚖️ לפני ואחרי</h3>
+              <h3 className="subhead">לפני ואחרי</h3>
               <div className="result-list">
                 <ResultRow label="יתרת הבלון לפני הפריסה" value={fmtMoney(balanceN)} />
                 {prevPaymentN > 0 && (
@@ -357,7 +364,7 @@ export default function BalloonSpreadCalc({ settings }: { settings: Settings }) 
             </div>
           </>
         ) : (
-          <div className="empty-note">{res.error ?? "הזיני נתונים ונחשב יחד 💙"}</div>
+          <div className="empty-note">{res.error ?? "הזיני נתונים כדי לחשב"}</div>
         )}
       </section>
 

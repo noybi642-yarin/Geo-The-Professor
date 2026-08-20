@@ -1050,7 +1050,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fee: 24.99,
   defaultRate: 8.9,
   rateMethod: "nominal",
-  accent: "blue",
+  accent: "forest",
   commonPcts: [50, 60, 70, 80, 90, 100],
   defaultProduct: "fixed",
   primeBase: 6,
@@ -1083,15 +1083,26 @@ export const PRODUCT_INFO: Record<
   },
 };
 
+/**
+ * גווני הממשק.
+ *
+ * ההעדפה הזו קיימת מאז הגרסה הראשונה ונשמרה. מה שהשתנה הוא
+ * הפלטה עצמה: כל הגוונים נבחרו כך שיישבו בתוך זהות המותג —
+ * כהים, רוויים במידה, וברי-ניגודיות כטקסט על לבן. כך הבחירה
+ * נשארת בידי המשתמשת בלי שאף אפשרות תשבור את מראה המערכת.
+ *
+ * accent — משמש כמילוי וכטקסט; dark — כותרות וערכים; soft —
+ * רקע מרומז; ring — טבעת מיקוד.
+ */
 export const ACCENTS: Record<
   string,
   { name: string; accent: string; dark: string; soft: string; ring: string }
 > = {
-  blue: { name: "כחול", accent: "#2563eb", dark: "#0b2a5e", soft: "#e8f0fe", ring: "rgba(37,99,235,.18)" },
-  sky: { name: "תכלת", accent: "#0284c7", dark: "#0c3b57", soft: "#e0f2fe", ring: "rgba(2,132,199,.18)" },
-  teal: { name: "טורקיז", accent: "#0d9488", dark: "#0f3d38", soft: "#d9f3f0", ring: "rgba(13,148,136,.18)" },
-  violet: { name: "סגול", accent: "#7c3aed", dark: "#2e1065", soft: "#ede9fe", ring: "rgba(124,58,237,.18)" },
-  rose: { name: "ורוד", accent: "#e11d48", dark: "#4c0519", soft: "#ffe4e6", ring: "rgba(225,29,72,.18)" },
+  forest: { name: "ירוק מותג", accent: "#004d40", dark: "#00342b", soft: "#e8f1e6", ring: "rgba(0,77,64,.16)" },
+  teal: { name: "טורקיז", accent: "#00695c", dark: "#00332d", soft: "#e0f0ed", ring: "rgba(0,105,92,.16)" },
+  moss: { name: "זית", accent: "#3f6212", dark: "#26380a", soft: "#eef2e2", ring: "rgba(63,98,18,.16)" },
+  slate: { name: "אבן", accent: "#334155", dark: "#1e293b", soft: "#e9edf0", ring: "rgba(51,65,85,.16)" },
+  graphite: { name: "פחם", accent: "#3f4945", dark: "#222826", soft: "#eceeed", ring: "rgba(63,73,69,.16)" },
 };
 
 export async function copyText(text: string): Promise<boolean> {

@@ -1,15 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState, type CSSProperties } from "react";
 import { ACCENTS, DEFAULT_SETTINGS, fmtPct, round2, type Settings } from "@/lib/finance";
 import { calcPrime, PRIME_SPREAD } from "@/lib/liveData";
 import { fmtStamp, useLiveData } from "@/lib/useLiveData";
+import AppShell from "@/components/shell/AppShell";
+import { ICON_SM, ICON_STROKE, IconRateHistory, IconRefresh } from "@/components/ui/icons";
 import { BoiChartPanel, BoiHistoryTable, PtsMark, periodLabel } from "./BoiHistory";
+import { PageHead } from "./shared";
 
 const SETTINGS_KEY = "sn.settings.v1";
 
-/** צבע המבטא נלקח מאותן הגדרות כמו שאר האפליקציה */
+/** גוון הממשק נלקח מאותן הגדרות כמו שאר האפליקציה */
 function useAccentVars(): CSSProperties {
   const [accentKey, setAccentKey] = useState(DEFAULT_SETTINGS.accent);
   useEffect(() => {
@@ -21,7 +23,7 @@ function useAccentVars(): CSSProperties {
       }
     } catch {}
   }, []);
-  const a = ACCENTS[accentKey] ?? ACCENTS.blue;
+  const a = ACCENTS[accentKey] ?? ACCENTS.forest;
   return {
     "--accent": a.accent,
     "--accent-dark": a.dark,
@@ -33,6 +35,8 @@ function useAccentVars(): CSSProperties {
 /**
  * עמוד היסטוריית ריבית בנק ישראל — עמוד מלא ונקי.
  * משתמש באותו hook של הנתונים העדכניים, ולכן באותו מטמון ו-fallback.
+ *
+ * כל המספרים כאן מגיעים מ-/api/live-data. אין ערך קבוע בקוד.
  */
 export default function BoiHistoryPage() {
   const accentVars = useAccentVars();
@@ -43,29 +47,23 @@ export default function BoiHistoryPage() {
   const prime = latest ? calcPrime(latest.rate) : null;
 
   return (
-    <div className="sn-app cpi-page" style={accentVars}>
-      <header className="sn-header">
-        <div className="sn-header-inner">
-          <div className="sn-header-row">
-            <Link href="/" className="head-btn" aria-label="חזרה למסך הבית">
-              → חזרה
-            </Link>
-            <button
-              type="button"
-              className="head-btn"
-              onClick={reload}
-              disabled={loading}
-              aria-label="רענון נתונים"
-            >
-              {loading ? "⏳" : "🔄"}
-            </button>
-          </div>
-          <h1 className="sn-title">🏦 היסטוריית ריבית בנק ישראל</h1>
-          <p className="sn-subtitle">12 התקופות האחרונות</p>
-        </div>
-      </header>
+    <div className="sn-app" style={accentVars}>
+      <AppShell
+        activeHref="/boi-history"
+        title="כלים ל-BDM"
+        actions={
+          <button type="button" className="head-btn" onClick={reload} disabled={loading}>
+            <IconRefresh size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+            {loading ? "מרענן…" : "רענון"}
+          </button>
+        }
+      >
+        <PageHead
+          icon={IconRateHistory}
+          title="היסטוריית ריבית בנק ישראל"
+          sub="12 התקופות האחרונות והפריים הנגזר מהן, לפי נתוני בנק ישראל"
+        />
 
-      <main className="sn-container">
         {!history || history.length === 0 ? (
           <section className="panel">
             <div className="empty-note">
@@ -74,27 +72,37 @@ export default function BoiHistoryPage() {
           </section>
         ) : (
           <div className="calc-screen">
-            <section className="panel cpi-summary">
-              <div className="cpi-summary-main">
-                <span className="cpi-summary-label">הריבית האחרונה</span>
-                <span className="cpi-summary-value">{fmtPct(round2(latest!.rate))}</span>
-                {latest!.changePts !== undefined && (
-                  <PtsMark pts={latest!.changePts} suffix="מהתקופה הקודמת" />
-                )}
+            {/* ── מדדי מפתח — רק נתונים שה-API כבר מחזיר ── */}
+            <div className="kpi-grid">
+              <div className="kpi kpi-primary">
+                <span className="kpi-label">ריבית בנק ישראל</span>
+                <span className="kpi-value">{fmtPct(round2(latest!.rate))}</span>
+                <span className="kpi-sub">{periodLabel(latest!)}</span>
               </div>
-              <div className="cpi-summary-side">
-                <span className="cpi-summary-label">תקופה</span>
-                <b>{periodLabel(latest!)}</b>
-                {prime !== null && (
-                  <span className="cpi-summary-base">
-                    פריים {fmtPct(prime)} (+{fmtPct(PRIME_SPREAD)})
-                  </span>
-                )}
+
+              <div className="kpi">
+                <span className="kpi-label">שינוי אחרון</span>
+                <span className="kpi-value">
+                  {latest!.changePts !== undefined ? (
+                    <PtsMark pts={latest!.changePts} />
+                  ) : (
+                    "—"
+                  )}
+                </span>
+                <span className="kpi-sub">מול התקופה הקודמת, בנקודות אחוז</span>
               </div>
-            </section>
+
+              <div className="kpi">
+                <span className="kpi-label">ריבית פריים</span>
+                <span className="kpi-value">{prime !== null ? fmtPct(prime) : "—"}</span>
+                <span className="kpi-sub">
+                  ריבית בנק ישראל + {fmtPct(PRIME_SPREAD)}
+                </span>
+              </div>
+            </div>
 
             <section className="panel">
-              <h2 className="panel-title">התפתחות הריבית</h2>
+              <h2 className="panel-title">התפתחות הריבית — 12 תקופות</h2>
               <BoiChartPanel history={history} />
               <div className="field-hint" style={{ marginTop: 10 }}>
                 הגרף מוצג במדרגות: ריבית בנק ישראל מחזיקה על ערך קבוע ומשתנה רק בהחלטה.
@@ -112,9 +120,7 @@ export default function BoiHistoryPage() {
             </section>
           </div>
         )}
-      </main>
-
-      <footer className="sn-footer">נבנה באהבה עבור נוי 💙</footer>
+      </AppShell>
     </div>
   );
 }

@@ -18,8 +18,7 @@ export default function TracksInfo() {
           <section key={id} className={`panel track-card${t.star ? " star" : ""}`}>
             <div className="track-card-head">
               <h2 className="track-card-title">
-                {t.star ? "⭐ " : ""}
-                {t.name}
+                                {t.name}
               </h2>
               {t.tagline && <span className="track-pill">{t.tagline}</span>}
             </div>

@@ -44,6 +44,7 @@ import {
   type Unit,
 } from "./shared";
 import ScheduleModal from "./ScheduleModal";
+import { ICON_SM, ICON_STROKE, IconDeal, IconInfo, IconResults, IconSchedule, IconSetupFee, IconTracks, IconUp } from "@/components/ui/icons";
 
 interface LoanForm {
   track: TrackId;
@@ -341,7 +342,7 @@ export default function LoanCalc({ settings }: { settings: Settings }) {
     }
     if (check.messages.length)
       lines.push("―――――――――――――――", ...check.messages.map((m) => `⚠️ ${m.text}`));
-    if (await copyText(lines.join("\n"))) notify("ההצעה הועתקה ✓");
+    if (await copyText(lines.join("\n"))) notify("ההצעה הועתקה");
   };
 
   const doCalc = () => {
@@ -351,14 +352,17 @@ export default function LoanCalc({ settings }: { settings: Settings }) {
 
   const clear = () => {
     setF({ ...INITIAL, track: f.track, product: f.product, mileage: f.mileage });
-    notify("נוקה ✨");
+    notify("נוקה");
   };
 
   return (
     <div className="calc-screen">
       {/* ── מסלול המימון ── */}
       <section className="panel">
-        <h2 className="panel-title">🧭 מסלול המימון</h2>
+        <h2 className="panel-title">
+          <IconTracks size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+          מסלול המימון
+        </h2>
         <div className="track-tabs" role="tablist" aria-label="בחירת מסלול">
           {TRACK_ORDER.map((id) => (
             <button
@@ -369,8 +373,7 @@ export default function LoanCalc({ settings }: { settings: Settings }) {
               className={`track-tab${track === id ? " on" : ""}${TRACKS[id].star ? " star" : ""}`}
               onClick={() => handleTrack(id)}
             >
-              {TRACKS[id].star ? "⭐ " : ""}
-              {TRACKS[id].name}
+                            {TRACKS[id].name}
             </button>
           ))}
         </div>
@@ -423,7 +426,8 @@ export default function LoanCalc({ settings }: { settings: Settings }) {
           <div className="alerts">
             {check.messages.map((m, i) => (
               <div key={i} className={`alert alert-${m.level}`}>
-                {m.level === "bdm" ? "🔶" : "⛔"} {m.text}
+                <IconInfo size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+              {m.text}
               </div>
             ))}
           </div>
@@ -432,7 +436,10 @@ export default function LoanCalc({ settings }: { settings: Settings }) {
 
       {/* ── פרטי העסקה ── */}
       <section className="panel">
-        <h2 className="panel-title">🚗 פרטי העסקה</h2>
+        <h2 className="panel-title">
+          <IconDeal size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+          פרטי העסקה
+        </h2>
         <div className="fields-grid">
           <NumField label="מחיר הרכב" value={f.price} onChange={handlePrice} suffix="₪" />
           <NumField
@@ -543,12 +550,20 @@ export default function LoanCalc({ settings }: { settings: Settings }) {
             />
           )}
         </div>
-        {product === "cpi" && <div className="note">ℹ️ {CPI_DISCLAIMER}</div>}
+        {product === "cpi" && (
+          <div className="note">
+            <IconInfo size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+            {CPI_DISCLAIMER}
+          </div>
+        )}
       </section>
 
       {/* ── עמלת הקמה ── */}
       <section className="panel">
-        <h2 className="panel-title">🧾 עמלת הקמה</h2>
+        <h2 className="panel-title">
+          <IconSetupFee size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+          עמלת הקמה
+        </h2>
         <div className="fields-grid">
           <NumField
             label="עמלת הקמה"
@@ -603,15 +618,16 @@ export default function LoanCalc({ settings }: { settings: Settings }) {
       {/* ── תוצאות ── */}
       <section className="panel" id="loan-results">
         <h2 className="panel-title">
-          💙 תוצאות — {rule.name} · {info.label}
+          <IconResults size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+          תוצאות — {rule.name} · {info.label}
         </h2>
         {ok && feeApplied ? (
           <>
             <div className="meta-badges">
-              <span className="badge">🧮 {info.methodLabel}</span>
-              <span className="badge">📈 {info.rateLabel}</span>
-              <span className="badge">💯 {fmtPct(rateN)} שנתי</span>
-              <span className="badge">🗓️ {fmtNum(res.months)} תשלומים</span>
+              <span className="badge">{info.methodLabel}</span>
+              <span className="badge">{info.rateLabel}</span>
+              <span className="badge">{fmtPct(rateN)} שנתי</span>
+              <span className="badge">{fmtNum(res.months)} תשלומים</span>
             </div>
 
             {product === "prime" ? (
@@ -706,7 +722,7 @@ export default function LoanCalc({ settings }: { settings: Settings }) {
 
             {product === "cpi" && cpiRes?.ok && (
               <div className="cpi-forecast">
-                <h3 className="subhead">📈 תחזית עם הנחת מדד {fmtPct(cpiN)} בשנה</h3>
+                <h3 className="subhead">תחזית עם הנחת מדד {fmtPct(cpiN)} בשנה</h3>
                 {cpiN === 0 ? (
                   <div className="field-hint">
                     הנחת המדד היא 0% — התחזית זהה לתוצאה הבסיסית שלמעלה.
@@ -738,12 +754,15 @@ export default function LoanCalc({ settings }: { settings: Settings }) {
                     />
                   </div>
                 )}
-                <div className="note">ℹ️ {CPI_DISCLAIMER}</div>
+                <div className="note">
+                <IconInfo size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+                {CPI_DISCLAIMER}
+              </div>
               </div>
             )}
           </>
         ) : (
-          <div className="empty-note">{errorText ?? "הזיני נתונים ונחשב יחד 💙"}</div>
+          <div className="empty-note">{errorText ?? "הזיני נתונים כדי לחשב"}</div>
         )}
       </section>
 

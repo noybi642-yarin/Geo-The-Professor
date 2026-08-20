@@ -11,6 +11,17 @@ import {
   type SetStateAction,
 } from "react";
 import { copyText, formatTyped } from "@/lib/finance";
+import {
+  ICON_LG,
+  ICON_SM,
+  ICON_STROKE,
+  IconClear,
+  IconCopy,
+  IconCopyToClient,
+  IconHelp,
+  IconClose,
+  type LucideIcon,
+} from "@/components/ui/icons";
 
 // ─── Toast ─────────────────────────────────────────────────────
 
@@ -64,7 +75,7 @@ export function Tip({ text }: { text: string }) {
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        ?
+        <IconHelp size={14} strokeWidth={ICON_STROKE} aria-hidden />
       </button>
       {open && (
         <span className="tip-bubble" role="tooltip">
@@ -168,15 +179,6 @@ export function NumField({
 
 // ─── שורת תוצאה עם העתקה בלחיצה ────────────────────────────────
 
-function CopyIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <rect x="9" y="9" width="13" height="13" rx="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  );
-}
-
 export function ResultRow({
   label,
   value,
@@ -202,10 +204,10 @@ export function ResultRow({
           className="copy-btn"
           aria-label={`העתקת ${label}`}
           onClick={async () => {
-            if (await copyText(value)) notify("הועתק ✓");
+            if (await copyText(value)) notify("הועתק");
           }}
         >
-          <CopyIcon />
+          <IconCopy size={14} strokeWidth={ICON_STROKE} aria-hidden />
         </button>
       </span>
     </div>
@@ -232,7 +234,7 @@ export function ResultHero({
       key={flash}
       className="result-hero"
       onClick={async () => {
-        if (value !== "—" && (await copyText(value))) notify("הועתק ✓");
+        if (value !== "—" && (await copyText(value))) notify("הועתק");
       }}
       title="לחיצה מעתיקה"
     >
@@ -261,14 +263,16 @@ export function ActionBar({
   return (
     <div className="actions">
       <button type="button" className="btn btn-primary" onClick={onCalc}>
-        🧮 חשב
+        חשב
       </button>
       <button type="button" className="btn btn-success" onClick={onCopy}>
-        📋 העתק ללקוח
+        <IconCopyToClient size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+        העתק ללקוח
       </button>
       {children}
       <button type="button" className="btn btn-ghost" onClick={onClear}>
-        ✨ נקה
+        <IconClear size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+        נקה
       </button>
     </div>
   );
@@ -278,11 +282,13 @@ export function ActionBar({
 
 export function Modal({
   title,
+  icon: Icon,
   onClose,
   children,
   wide,
 }: {
   title: string;
+  icon?: LucideIcon;
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
@@ -307,13 +313,47 @@ export function Modal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-head">
-          <h3>{title}</h3>
+          <h3>
+            {Icon && <Icon size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />}
+            {title}
+          </h3>
           <button type="button" className="modal-close" aria-label="סגירה" onClick={onClose}>
-            ✕
+            <IconClose size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
           </button>
         </div>
         <div className="modal-body">{children}</div>
       </div>
+    </div>
+  );
+}
+
+// ─── כותרת עמוד ────────────────────────────────────────────────
+
+/**
+ * כותרת אחידה לכל מסך. אותה היררכיה בכל מקום: אייקון, שם המסך,
+ * ומשפט הסבר קצר כשהוא באמת מוסיף.
+ */
+export function PageHead({
+  icon: Icon,
+  title,
+  sub,
+  actions,
+}: {
+  icon?: LucideIcon;
+  title: string;
+  sub?: string;
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="page-head">
+      <div className="page-head-row">
+        <h2 className="page-title">
+          {Icon && <Icon size={ICON_LG} strokeWidth={ICON_STROKE} aria-hidden />}
+          {title}
+        </h2>
+        {actions}
+      </div>
+      {sub && <p className="page-sub">{sub}</p>}
     </div>
   );
 }

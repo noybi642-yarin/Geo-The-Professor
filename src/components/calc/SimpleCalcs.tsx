@@ -20,6 +20,7 @@ import {
   usePersistentState,
   useToast,
 } from "./shared";
+import { ICON_SM, ICON_STROKE, IconBalloon, IconDownPayment, IconFinPct, IconInterest, IconResults } from "@/components/ui/icons";
 
 function useFlash(resultsId: string) {
   const [flash, setFlash] = useState(0);
@@ -67,13 +68,16 @@ export function InterestCalc({ settings }: { settings: Settings }) {
       `📈 סך הריבית: ${fmtMoney(res.totalInterest)}`,
       `📊 סך הכל ישולם: ${fmtMoney(res.totalPaid)}`,
     ].join("\n");
-    if (await copyText(text)) notify("הועתק ✓");
+    if (await copyText(text)) notify("הועתק");
   };
 
   return (
     <div className="calc-screen">
       <section className="panel">
-        <h2 className="panel-title">💰 פרטי ההלוואה</h2>
+        <h2 className="panel-title">
+          <IconInterest size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+          פרטי ההלוואה
+        </h2>
         <div className="fields-grid">
           <NumField label="סכום הלוואה" value={f.loan} onChange={(v) => setF((p) => ({ ...p, loan: v }))} suffix="₪" />
           <NumField
@@ -96,7 +100,10 @@ export function InterestCalc({ settings }: { settings: Settings }) {
       </section>
 
       <section className="panel" id="interest-results">
-        <h2 className="panel-title">💙 תוצאות</h2>
+        <h2 className="panel-title">
+          <IconResults size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+          תוצאות
+        </h2>
         {res.ok ? (
           <>
             <ResultHero label="סך הריבית שתשולם" value={fmtMoney(res.totalInterest)} flash={flash} />
@@ -107,7 +114,7 @@ export function InterestCalc({ settings }: { settings: Settings }) {
             </div>
           </>
         ) : (
-          <div className="empty-note">{res.error ?? "הזיני נתונים ונחשב יחד 💙"}</div>
+          <div className="empty-note">{res.error ?? "הזיני נתונים כדי לחשב"}</div>
         )}
       </section>
 
@@ -116,7 +123,7 @@ export function InterestCalc({ settings }: { settings: Settings }) {
         onCopy={copy}
         onClear={() => {
           setF({ loan: "", rate: "", months: "60" });
-          notify("נוקה ✨");
+          notify("נוקה");
         }}
       />
     </div>
@@ -150,13 +157,16 @@ export function FinPctCalc() {
       `💳 סכום ההלוואה: ${fmtMoney(loanN)}`,
       `📈 אחוז המימון: ${fmtPct(pctN)}`,
     ].join("\n");
-    if (await copyText(text)) notify("הועתק ✓");
+    if (await copyText(text)) notify("הועתק");
   };
 
   return (
     <div className="calc-screen">
       <section className="panel">
-        <h2 className="panel-title">📈 פרטי העסקה</h2>
+        <h2 className="panel-title">
+          <IconFinPct size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+          פרטי העסקה
+        </h2>
         <div className="fields-grid">
           <NumField label="מחיר הרכב" value={f.price} onChange={(v) => setF((p) => ({ ...p, price: v }))} suffix="₪" />
           <NumField label="מקדמה" value={f.down} onChange={(v) => setF((p) => ({ ...p, down: v }))} suffix="₪" />
@@ -164,7 +174,10 @@ export function FinPctCalc() {
       </section>
 
       <section className="panel" id="finpct-results">
-        <h2 className="panel-title">💙 תוצאות</h2>
+        <h2 className="panel-title">
+          <IconResults size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+          תוצאות
+        </h2>
         {ok ? (
           <>
             <ResultHero label="אחוז המימון" value={fmtPct(pctN)} flash={flash} />
@@ -174,7 +187,7 @@ export function FinPctCalc() {
           </>
         ) : (
           <div className="empty-note">
-            {priceN > 0 && downN > priceN ? "המקדמה גבוהה ממחיר הרכב" : "הזיני נתונים ונחשב יחד 💙"}
+            {priceN > 0 && downN > priceN ? "המקדמה גבוהה ממחיר הרכב" : "הזיני נתונים כדי לחשב"}
           </div>
         )}
       </section>
@@ -184,7 +197,7 @@ export function FinPctCalc() {
         onCopy={copy}
         onClear={() => {
           setF({ price: "", down: "" });
-          notify("נוקה ✨");
+          notify("נוקה");
         }}
       />
     </div>
@@ -218,13 +231,16 @@ export function DownCalc({ settings }: { settings: Settings }) {
       `💵 מקדמה לתשלום: ${fmtMoney(downN)}`,
       `💳 סכום ההלוואה: ${fmtMoney(loanN)}`,
     ].join("\n");
-    if (await copyText(text)) notify("הועתק ✓");
+    if (await copyText(text)) notify("הועתק");
   };
 
   return (
     <div className="calc-screen">
       <section className="panel">
-        <h2 className="panel-title">💵 פרטי העסקה</h2>
+        <h2 className="panel-title">
+          <IconDownPayment size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+          פרטי העסקה
+        </h2>
         <div className="fields-grid">
           <NumField label="מחיר הרכב" value={f.price} onChange={(v) => setF((p) => ({ ...p, price: v }))} suffix="₪" />
           <NumField
@@ -241,7 +257,10 @@ export function DownCalc({ settings }: { settings: Settings }) {
       </section>
 
       <section className="panel" id="down-results">
-        <h2 className="panel-title">💙 תוצאות</h2>
+        <h2 className="panel-title">
+          <IconResults size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+          תוצאות
+        </h2>
         {ok ? (
           <>
             <ResultHero label="מקדמה לתשלום" value={fmtMoney(downN)} flash={flash} />
@@ -251,7 +270,7 @@ export function DownCalc({ settings }: { settings: Settings }) {
           </>
         ) : (
           <div className="empty-note">
-            {priceN > 0 && pctN > 100 ? "אחוז המימון לא יכול לעלות על 100%" : "הזיני נתונים ונחשב יחד 💙"}
+            {priceN > 0 && pctN > 100 ? "אחוז המימון לא יכול לעלות על 100%" : "הזיני נתונים כדי לחשב"}
           </div>
         )}
       </section>
@@ -261,7 +280,7 @@ export function DownCalc({ settings }: { settings: Settings }) {
         onCopy={copy}
         onClear={() => {
           setF({ price: "", finPct: "" });
-          notify("נוקה ✨");
+          notify("נוקה");
         }}
       />
     </div>
@@ -304,13 +323,16 @@ export function BalloonCalc() {
     ]
       .filter(Boolean)
       .join("\n");
-    if (await copyText(text)) notify("הועתק ✓");
+    if (await copyText(text)) notify("הועתק");
   };
 
   return (
     <div className="calc-screen">
       <section className="panel">
-        <h2 className="panel-title">📊 פרטי העסקה</h2>
+        <h2 className="panel-title">
+          <IconBalloon size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+          פרטי העסקה
+        </h2>
         <div className="fields-grid">
           <NumField label="מחיר הרכב" value={f.price} onChange={(v) => setF((p) => ({ ...p, price: v }))} suffix="₪" />
           <NumField
@@ -334,7 +356,10 @@ export function BalloonCalc() {
       </section>
 
       <section className="panel" id="balloon-results">
-        <h2 className="panel-title">💙 תוצאות</h2>
+        <h2 className="panel-title">
+          <IconResults size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+          תוצאות
+        </h2>
         {ok ? (
           <>
             <ResultHero label="סכום הבלון" value={fmtMoney(balloonN)} flash={flash} />
@@ -344,7 +369,7 @@ export function BalloonCalc() {
           </>
         ) : (
           <div className="empty-note">
-            {priceN > 0 && downN > priceN ? "המקדמה גבוהה ממחיר הרכב" : "הזיני נתונים ונחשב יחד 💙"}
+            {priceN > 0 && downN > priceN ? "המקדמה גבוהה ממחיר הרכב" : "הזיני נתונים כדי לחשב"}
           </div>
         )}
       </section>
@@ -354,7 +379,7 @@ export function BalloonCalc() {
         onCopy={copy}
         onClear={() => {
           setF({ price: "", balloonPct: "", down: "" });
-          notify("נוקה ✨");
+          notify("נוקה");
         }}
       />
     </div>
