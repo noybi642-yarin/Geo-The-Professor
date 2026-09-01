@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import {
   BOI_FETCH_OBSERVATIONS,
   BOI_HISTORY_MONTHS,
+  cacheHeaderFor,
+  LIVE_CACHE_SECONDS,
   buildBoiHistory,
   buildCpiHistory,
   calcPrime,
@@ -15,9 +17,9 @@ import {
 } from "@/lib/liveData";
 
 export const runtime = "nodejs";
-// הנתונים מתעדכנים אחת לחודש (מדד) ואחת לכמה שבועות (ריבית),
-// ולכן שעה של cache בצד השרת היא איזון סביר בין טריות לעומס.
-export const revalidate = 3600;
+// חלון המטמון מוגדר במקום אחד (liveData) ומשמש כאן גם למקטע הנתיב
+// וגם למשיכות מהמקורות, כדי ששתי השכבות לא יחזיקו גילאים שונים.
+export const revalidate = LIVE_CACHE_SECONDS;
 
 /** מקורות רשמיים בלבד — ללא scraping וללא מנועי חיפוש */
 // קריאה אחת מחזירה את כל ההיסטוריה הדרושה — אין קריאה לכל חודש.
@@ -74,9 +76,15 @@ interface SeriesNote {
   latestPeriod?: string;
 }
 
+/**
+ * fresh=true עוקף את מטמון הנתונים של Next. בלעדיו גם ריצה חדשה
+ * של הנתיב עלולה לקבל תשובה ישנה מהמקור — וזו הסיבה שכפתור הרענון
+ * לא רענן דבר.
+ */
 async function fetchJson(
   url: string,
-  timeoutMs = TIMEOUT_MS
+  timeoutMs = TIMEOUT_MS,
+  fresh = false
 ): Promise<{ json: unknown; attempt: Attempt }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -84,7 +92,7 @@ async function fetchJson(
     const res = await fetch(url, {
       signal: controller.signal,
       headers: { Accept: "application/json", "User-Agent": "shalom-noy-calc/1.0" },
-      next: { revalidate },
+      ...(fresh ? { cache: "no-store" as const } : { next: { revalidate } }),
     });
     const text = await res.text();
     if (!res.ok) {
@@ -113,11 +121,12 @@ async function fetchJson(
 /** מנסה את המקורות לפי הסדר עד שאחד מהם מחזיר נתון שניתן לפענח */
 async function resolve<T>(
   urls: string[],
-  parse: (json: unknown) => T | null
+  parse: (json: unknown) => T | null,
+  fresh = false
 ): Promise<{ value: T | null; attempts: Attempt[] }> {
   const attempts: Attempt[] = [];
   for (const url of urls) {
-    const { json, attempt } = await fetchJson(url);
+    const { json, attempt } = await fetchJson(url, TIMEOUT_MS, fresh);
     if (json !== null) {
       const value = parse(json);
       if (value) {
@@ -138,7 +147,7 @@ async function resolve<T>(
  * הכתובות שאחרי הראשונה מקבלות תקציב זמן קצר יותר — הן מועמדות
  * להיסטוריה בלבד, ואין להאט בגללן את שאר הנתונים.
  */
-async function resolveBoi(): Promise<{
+async function resolveBoi(fresh = false): Promise<{
   rate: BoiReading | null;
   history: BoiReading[] | null;
   attempts: Attempt[];
@@ -151,7 +160,11 @@ async function resolveBoi(): Promise<{
 
   for (let i = 0; i < BOI_ENDPOINTS.length; i++) {
     if (rate && history) break;
-    const { json, attempt } = await fetchJson(BOI_ENDPOINTS[i], i === 0 ? TIMEOUT_MS : HISTORY_TIMEOUT_MS);
+    const { json, attempt } = await fetchJson(
+      BOI_ENDPOINTS[i],
+      i === 0 ? TIMEOUT_MS : HISTORY_TIMEOUT_MS,
+      fresh
+    );
     if (json === null) {
       attempts.push(attempt);
       continue;
@@ -182,12 +195,16 @@ async function resolveBoi(): Promise<{
 }
 
 export async function GET(request: Request) {
-  const debug = new URL(request.url).searchParams.get("debug") === "1";
+  const params = new URL(request.url).searchParams;
+  const debug = params.get("debug") === "1";
+  // כפתור הרענון שולח fresh עם חותמת זמן: הערך משתנה בכל לחיצה,
+  // ולכן גם ל-CDN אין עותק שמור להחזיר. האבחון תמיד טרי.
+  const fresh = debug || params.has("fresh");
 
   const [cpiRes, boiRes] = await Promise.all([
     // הסדרה נפתרת בבת אחת: הקריאה העדכנית היא האיבר הראשון בה
-    resolve<CpiReading[]>(CPI_ENDPOINTS, (json) => buildCpiHistory(json)),
-    resolveBoi(),
+    resolve<CpiReading[]>(CPI_ENDPOINTS, (json) => buildCpiHistory(json), fresh),
+    resolveBoi(fresh),
   ]);
 
   const history = cpiRes.value;
@@ -220,7 +237,7 @@ export async function GET(request: Request) {
 
   // בדיקות האבחון נמשכות רק במצב debug, ולעולם אינן מזינות נתון מוצג
   const catalog = debug
-    ? await fetchJson(BOI_CATALOG_URL, 8000).then(({ json, attempt }) => ({
+    ? await fetchJson(BOI_CATALOG_URL, 8000, true).then(({ json, attempt }) => ({
         status: attempt.status,
         error: attempt.error,
         flows: parseDataflowCatalog(json as Parameters<typeof parseDataflowCatalog>[0]),
@@ -242,11 +259,8 @@ export async function GET(request: Request) {
       : data,
     {
       headers: {
-        // מטמון ב-CDN של Vercel לשעה, עם הגשה מהמטמון בזמן רענון ברקע.
-        // תשובת אבחון אינה נשמרת במטמון — היא נועדה לבדיקה חוזרת מיידית.
-        "Cache-Control": debug
-          ? "no-store"
-          : "public, s-maxage=3600, stale-while-revalidate=86400",
+        // משיכה מאולצת ואבחון אינם נשמרים במטמון בשום שכבה
+        "Cache-Control": cacheHeaderFor(fresh ? "fresh" : "cached"),
       },
     }
   );

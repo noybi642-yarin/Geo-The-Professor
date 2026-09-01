@@ -11,6 +11,9 @@ import {
   toNumber,
   hebrewMonth,
   PRIME_SPREAD,
+  cacheHeaderFor,
+  LIVE_CACHE_SECONDS,
+  LIVE_SWR_SECONDS,
 } from "../src/lib/liveData.ts";
 
 // ─── ריבית פריים ───────────────────────────────────────────────
@@ -196,4 +199,33 @@ test("שרשרת — כשל בריבית משאיר פריים null, המדד ע
   assert.equal(boi, null);
   assert.equal(calcPrime(rate), null);
   assert.ok(cpi, "כשל במקור אחד אינו פוגע בשני");
+});
+
+// ─── מדיניות מטמון ─────────────────────────────────────────────
+// הבדיקות האלה מעגנות את הסיבה לכך שריבית בנק ישראל נשארה על ערך
+// ישן ביום שבו היא השתנתה: חלון הגשה-בזמן-רענון של 24 שעות.
+
+test("מטמון — חלון ההגשה מהמטמון קצר, ולא יום שלם", () => {
+  const h = cacheHeaderFor("cached");
+  assert.match(h, /s-maxage=600/);
+  assert.match(h, /stale-while-revalidate=60/);
+  // 86400 היה מאפשר להגיש מספר בן יום כאילו הוא עדכני
+  assert.ok(!h.includes("86400"), "חלון של 24 שעות אינו מקובל למספר שמשתנה בהחלטה");
+});
+
+test("מטמון — הגיל המרבי של נתון מוצג נמדד בדקות", () => {
+  const worstCaseSeconds = LIVE_CACHE_SECONDS + LIVE_SWR_SECONDS;
+  assert.ok(
+    worstCaseSeconds <= 20 * 60,
+    `גיל מרבי ${worstCaseSeconds} שניות — גבוה מדי לריבית שהשתנתה היום`
+  );
+});
+
+test("מטמון — משיכה מאולצת אינה נשמרת בשום שכבה", () => {
+  assert.equal(cacheHeaderFor("fresh"), "no-store");
+});
+
+test("מטמון — העומס על המקורות הרשמיים נשאר זניח", () => {
+  const perHour = 3600 / LIVE_CACHE_SECONDS;
+  assert.ok(perHour <= 6, `${perHour} משיכות בשעה — יותר מדי מול API רשמי`);
 });

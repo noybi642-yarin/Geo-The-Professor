@@ -53,7 +53,15 @@ export function useLiveData(): UseLiveData {
     };
   }, []);
 
-  const load = useCallback(async () => {
+  /**
+   * force=true הוא לחיצה על "רענון".
+   *
+   * cache:"no-store" לבדו נוגע רק במטמון הדפדפן — הבקשה עדיין
+   * נוחתת על אותה כתובת ב-CDN ומקבלת את אותם בייטים שמורים. לכן
+   * משיכה מאולצת מוסיפה חותמת זמן לכתובת: מפתח מטמון חדש, ולכן
+   * בהכרח פנייה חדשה לשרת, שגם הוא יעקוף את המטמון שלו.
+   */
+  const load = useCallback(async (force = false) => {
     setLoading(true);
     let cached: Cached | null = null;
     try {
@@ -68,7 +76,8 @@ export function useLiveData(): UseLiveData {
     }
 
     try {
-      const res = await fetch("/api/live-data", { cache: "no-store" });
+      const url = force ? `/api/live-data?fresh=${Date.now()}` : "/api/live-data";
+      const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const fresh = (await res.json()) as LiveData;
       if (!mounted.current) return;
@@ -101,7 +110,7 @@ export function useLiveData(): UseLiveData {
     void load();
   }, [load]);
 
-  return { data, savedAt, stale, loading, reload: () => void load() };
+  return { data, savedAt, stale, loading, reload: () => void load(true) };
 }
 
 export const fmtStamp = (iso: string) => {
