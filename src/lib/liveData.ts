@@ -71,6 +71,37 @@ export const BOI_FETCH_RECORDS = BOI_HISTORY_MONTHS + 1;
  */
 export const BOI_FETCH_OBSERVATIONS = 420;
 
+// ─── מדיניות מטמון ─────────────────────────────────────────────
+
+/**
+ * כמה זמן תשובה נחשבת טרייה, בשניות.
+ *
+ * ריבית בנק ישראל משתנה בהחלטה ולא לפי לוח קבוע, ובאותו יום עצמו
+ * המספר חייב להיות נכון. עשר דקות הן פשרה: לכל היותר שש משיכות
+ * בשעה מכל אזור קצה — עומס זניח על ה-API הרשמי — ובכל זאת המספר
+ * מתעדכן תוך דקות ולא תוך שעה.
+ */
+export const LIVE_CACHE_SECONDS = 600;
+
+/**
+ * חלון ההגשה מהמטמון בזמן רענון ברקע.
+ *
+ * קצר בכוונה. חלון ארוך אמנם מאיץ את התגובה, אבל באתר בתעבורה
+ * נמוכה כל אזור קצה מחזיק עותק ישן משלו ועשוי שלא לקבל מספיק
+ * פניות כדי לרענן אותו — וכך מספר שהשתנה היום נשאר ישן.
+ */
+export const LIVE_SWR_SECONDS = 60;
+
+/**
+ * כותרת המטמון לתשובה. מופרדת מהנתיב כדי שתהיה בת-בדיקה: זו
+ * בדיוק ההגדרה שגרמה לריבית להיתקע על ערך ישן.
+ */
+export function cacheHeaderFor(mode: "cached" | "fresh"): string {
+  return mode === "fresh"
+    ? "no-store"
+    : `public, s-maxage=${LIVE_CACHE_SECONDS}, stale-while-revalidate=${LIVE_SWR_SECONDS}`;
+}
+
 export interface LiveData {
   cpi: CpiReading | null;
   /**
