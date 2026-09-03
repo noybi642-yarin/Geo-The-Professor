@@ -12,7 +12,7 @@ import {
   MANAGER_TIERS,
   MANAGER_TIER_ORDER,
   MANAGER_VARIABLE_BONUS,
-  PENDING_BONUS_NOTE,
+  MIN_NOT_MET_NOTE,
   TIER_STEP_PTS,
   dealsWord,
   fmtIls,
@@ -31,17 +31,25 @@ const agentTiersTable = {
   }),
 };
 
-const managerTiersTable = (group: ManagerGroupId) => ({
-  head: ["מדרגת ביצוע", "סכום התמריץ", "תנאי מינימום"],
-  rows: MANAGER_TIER_ORDER.map((id) => {
-    const t = MANAGER_TIERS[id];
-    return [
-      t.range,
-      fmtIls(t.amount),
-      `לפחות ${dealsWord(MANAGER_GROUPS[group].minDeals)} מימון`,
-    ];
-  }),
+const managerTiersTable = () => ({
+  head: ["מדרגת ביצוע", "תמריץ המנהל"],
+  rows: [
+    [MANAGER_TIERS.none.range, fmtIls(MANAGER_TIERS.none.amount)],
+    ...MANAGER_TIER_ORDER.map((id) => {
+      const t = MANAGER_TIERS[id];
+      return [t.range, fmtIls(t.amount)];
+    }),
+  ],
 });
+
+/** התעריף לכל עסקת מימון — נקבע לפי המדרגה, אם הושג המינימום */
+const managerDealRatesTable = {
+  head: ["מדרגת ביצוע", "מימון רגיל", "Extra Lease"],
+  rows: AGENT_TIER_ORDER.map((id) => {
+    const t = AGENT_TIERS[id];
+    return [t.range, `${fmtIls(t.regular)} לעסקה`, `${fmtIls(t.extra)} לעסקה`];
+  }),
+};
 
 /** ההסבר המספרי של המדרגות, מול יעד לדוגמה */
 const agentExample = [
@@ -58,12 +66,21 @@ const managerExample = [
 ];
 
 /** כללי המדרגות זהים לשתי קבוצות המותגים; רק המינימום שונה */
-const managerRules = (group: ManagerGroupId) => [
-  `ביצוע הנמוך ביותר מ-${TIER_STEP_PTS} נקודות אחוז מתחת ליעד: אין תמריץ רגיל.`,
+const managerRules = () => [
+  `ביצוע הנמוך ביותר מ-${TIER_STEP_PTS} נקודות אחוז מתחת ליעד: ${fmtIls(MANAGER_TIERS.none.amount)}.`,
   `ביצוע החל מ-${TIER_STEP_PTS} נקודות אחוז מתחת ליעד ועד פחות מהיעד: ${fmtIls(MANAGER_TIERS.below.amount)}.`,
   `ביצוע מהיעד ועד פחות מ-${TIER_STEP_PTS} נקודות אחוז מעל היעד: ${fmtIls(MANAGER_TIERS.onTarget.amount)}.`,
   `ביצוע של ${TIER_STEP_PTS} נקודות אחוז ומעלה מעל היעד: ${fmtIls(MANAGER_TIERS.above.amount)}.`,
-  `בכל המדרגות נדרש מינימום של ${dealsWord(MANAGER_GROUPS[group].minDeals)} מימון.`,
+  "המדרגה נקבעת לפי הפער המדויק, לפני עיגול.",
+];
+
+/** כללי המינימום — ההשפעה היחידה שלו היא על התעריף לעסקה */
+const minimumRules = (group: ManagerGroupId) => [
+  `מינימום העסקאות בקבוצה זו: ${dealsWord(MANAGER_GROUPS[group].minDeals)} מימון.`,
+  "סך העסקאות לבדיקת המינימום = מימון רגיל + Extra Lease.",
+  "המינימום אינו תנאי לקבלת תמריץ המנהל שלפי הביצוע.",
+  "הושג המינימום — התעריף לעסקה נקבע לפי מדרגת הביצוע.",
+  `לא הושג המינימום — התעריף נשאר הבסיסי: ${fmtIls(AGENT_TIERS.base.regular)} למימון רגיל ו-${fmtIls(AGENT_TIERS.base.extra)} ל-Extra Lease.`,
 ];
 
 const managerItem = (group: ManagerGroupId, id: string): KnowledgeItem => {
@@ -73,28 +90,53 @@ const managerItem = (group: ManagerGroupId, id: string): KnowledgeItem => {
     icon: "",
     title: `מנהל אולם — ${g.label}`,
     summary: [
-      "התמריץ למנהל הוא סכום כולל ואינו מוכפל במספר העסקאות.",
-      `מדרגות: ${fmtIls(MANAGER_TIERS.below.amount)} מתחת ליעד, ${fmtIls(MANAGER_TIERS.onTarget.amount)} בעמידה ביעד, ${fmtIls(MANAGER_TIERS.above.amount)} מ-${TIER_STEP_PTS} נקודות אחוז מעל היעד.`,
-      `בכל המדרגות נדרשות לפחות ${dealsWord(g.minDeals)} מימון.`,
+      "תמריץ המנהל מורכב משני רכיבים מצטברים: תמריץ לפי הביצוע מול היעד, ותמריץ לכל עסקת מימון.",
+      `תמריץ הביצוע הוא סכום כולל: ${fmtIls(MANAGER_TIERS.below.amount)} מתחת ליעד, ${fmtIls(MANAGER_TIERS.onTarget.amount)} בעמידה ביעד, ${fmtIls(MANAGER_TIERS.above.amount)} מ-${TIER_STEP_PTS} נקודות אחוז מעל היעד.`,
+      `מינימום העסקאות בקבוצה זו הוא ${dealsWord(g.minDeals)}. הוא אינו מאפס את תמריץ המנהל — הוא קובע רק את התעריף לכל עסקה.`,
       `בונוס יעד משתנה: ${fmtIls(MANAGER_VARIABLE_BONUS)}.`,
     ],
     groups: [
       {
-        title: "מדרגות התמריץ",
+        title: "א׳ · תמריץ לפי הביצוע מול היעד",
         note: "סכום כולל, לא לעסקה",
-        table: managerTiersTable(group),
+        table: managerTiersTable(),
       },
-      { title: "כללי המדרגות", items: managerRules(group) },
+      { title: "כללי המדרגות", items: managerRules() },
       {
-        title: `דוגמה — יעד ${EX}%`,
-        items: managerExample,
+        title: "ב׳ · מינימום עסקאות",
+        note: dealsWord(g.minDeals),
+        items: minimumRules(group),
+        footnote: MIN_NOT_MET_NOTE,
+      },
+      {
+        title: "ג׳ · תמריץ לכל עסקת מימון",
+        note: "כשהמינימום הושג",
+        table: managerDealRatesTable,
+      },
+      {
+        title: "ד׳ · הסכום הכולל",
+        items: [
+          "תמריץ המנהל לפי מדרגת הביצוע",
+          "+ תמריץ עסקאות מימון רגיל",
+          "+ תמריץ עסקאות Extra Lease",
+          "+ בונוס יעד משתנה, אם הושג",
+        ],
+      },
+      {
+        title: `דוגמה — יעד ${EX}%, ביצוע 65.9%, ${dealsWord(4)} מימון רגיל`,
+        items: [
+          `הפער מהיעד: 22.9 נקודות אחוז — תמריץ מנהל ${fmtIls(MANAGER_TIERS.above.amount)}.`,
+          `המינימום הוא ${dealsWord(g.minDeals)} ובוצעו ${dealsWord(4)}, ולכן התעריף נשאר בסיסי: ${fmtIls(AGENT_TIERS.base.regular)}.`,
+          `תמריץ עסקאות: 4 × ${fmtIls(AGENT_TIERS.base.regular)} = ${fmtIls(500)}.`,
+          `סך התמריץ: ${fmtIls(MANAGER_TIERS.above.amount + 500)}.`,
+        ],
       },
     ],
     keywords: [
       "מנהל אולם", "מנהל", g.label, group === "hyundai" ? "יונדאי" : "מיצובישי",
       group === "hyundai" ? "O&J" : "אורה",
-      "מינימום עסקאות", `${g.minDeals} עסקאות`,
-      "400", "1000", "2000", "מדרגה", "תמריץ מנהל",
+      "מינימום עסקאות", `${g.minDeals} עסקאות`, "תעריף בסיסי",
+      "400", "1000", "2000", "מדרגה", "תמריץ מנהל", "פר עסקה",
     ],
   };
 };
@@ -165,34 +207,26 @@ const items: KnowledgeItem[] = [
     icon: "",
     title: "בונוס משתנה למנהל אולם",
     summary: [
-      `מנהל אולם יכול לקבל תוספת של ${fmtIls(MANAGER_VARIABLE_BONUS)} בהגעה ליעד משתנה, כגון משפך או Extra Lease.`,
-      `כאשר המנהל עומד גם במינימום העסקאות וגם ביעד המשתנה — מתווספים ${fmtIls(MANAGER_VARIABLE_BONUS)} לתמריץ הרגיל.`,
-      "כאשר לא הושג מינימום העסקאות, הבונוס אינו נכלל בסכום הוודאי ומוצג בנפרד כבונוס אפשרי.",
+      `מנהל אולם מקבל תוספת של ${fmtIls(MANAGER_VARIABLE_BONUS)} בהגעה ליעד משתנה, כגון משפך או Extra Lease.`,
+      "הבונוס מתווסף לתמריץ המנהל ולתמריץ העסקאות כאחד.",
+      "הבונוס אינו מותנה בעמידה במינימום העסקאות.",
     ],
     groups: [
       {
-        title: "מתי הבונוס ודאי",
+        title: "הכלל",
         items: [
-          `הושג מינימום העסקאות של קבוצת המותגים, והושג יעד משתנה: מתווספים ${fmtIls(MANAGER_VARIABLE_BONUS)}.`,
+          `הושג יעד משתנה: מתווספים ${fmtIls(MANAGER_VARIABLE_BONUS)} לסך התמריץ.`,
+          "הבונוס ניתן בין אם הושג מינימום העסקאות ובין אם לא.",
         ],
-      },
-      {
-        title: "מתי הזכאות טעונה בדיקה",
-        items: [
-          "לא הושג מינימום העסקאות, אך הושג יעד משתנה.",
-          `במצב הזה הסכום אינו נכלל בתמריץ הוודאי, ומוצג בנפרד כ״בונוס משתנה אפשרי״ בסך ${fmtIls(MANAGER_VARIABLE_BONUS)}.`,
-        ],
-        footnote: PENDING_BONUS_NOTE,
       },
       {
         title: "יעדים משתנים אפשריים",
         items: ["משפך", "Extra Lease", "יעד משתנה אחר"],
       },
     ],
-    note: PENDING_BONUS_NOTE,
     keywords: [
       "בונוס משתנה", "יעד משתנה", "משפך", "Extra Lease", "500",
-      "מנהל אולם", "זכאות", "בדיקה",
+      "מנהל אולם",
     ],
   },
 ];

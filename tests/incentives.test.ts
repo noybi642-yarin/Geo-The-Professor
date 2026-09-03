@@ -13,6 +13,7 @@ import {
   agentTierFor,
   calcAgentIncentive,
   calcManagerIncentive,
+  managerDealTierFor,
   managerTierFor,
   type AgentInput,
   type ManagerInput,
@@ -32,7 +33,8 @@ const manager = (o: Partial<ManagerInput>): ManagerInput => ({
   group: "hyundai",
   target: null,
   actual: null,
-  deals: 0,
+  regularDeals: 0,
+  extraDeals: 0,
   variableGoalReached: false,
   ...o,
 });
@@ -102,59 +104,60 @@ test("בדיקה 4 — הצטברות יעדים משתנים: 500 ₪ תוספ�
   assert.ok(r.variableLines.every((l) => !l.error));
 });
 
-test("בדיקה 5 — מנהל יונדאי/O&J מעל היעד עם יעד משתנה: 2,500 ₪", () => {
+test("מנהל — מעל היעד, מינימום הושג, עם יעד משתנה", () => {
+  // 2,000 תמריץ מנהל + 5×250 עסקאות + 500 בונוס
   const r = calcManagerIncentive(
-    manager({ group: "hyundai", target: 43, actual: 45, deals: 5, variableGoalReached: true })
+    manager({
+      group: "hyundai",
+      target: 43,
+      actual: 45,
+      regularDeals: 5,
+      variableGoalReached: true,
+    })
   );
   assert.equal(r.tier!.id, "above");
-  assert.equal(r.baseAmount, 2000);
+  assert.equal(r.managerAmount, 2000);
+  assert.equal(r.regularAmount, 1250);
   assert.equal(r.variableBonus, 500);
-  assert.equal(r.certainTotal, 2500);
-  assert.equal(r.pendingBonus, 0);
-  assert.equal(r.needsReview, false);
+  assert.equal(r.total, 3750);
 });
 
-test("בדיקה 6 — מנהל מיצובישי/אורה מתחת ליעד: 400 ₪", () => {
+test("מנהל — מיצובישי/אורה מתחת ליעד, מינימום הושג", () => {
+  // 400 תמריץ מנהל + 3×125 (מתחת ליעד → תעריף בסיס)
   const r = calcManagerIncentive(
-    manager({ group: "mitsubishi", target: 43, actual: 42, deals: 3 })
+    manager({ group: "mitsubishi", target: 43, actual: 42, regularDeals: 3 })
   );
   assert.equal(r.tier!.id, "below");
   assert.equal(r.meetsMin, true, "3 עסקאות הן המינימום במיצובישי");
-  assert.equal(r.certainTotal, 400);
+  assert.equal(r.managerAmount, 400);
+  assert.equal(r.regularRate, 125, "מתחת ליעד — תעריף הבסיס גם כשהמינימום הושג");
+  assert.equal(r.total, 775);
 });
 
-test("בדיקה 7 — אי-עמידה במינימום העסקאות", () => {
+test("מנהל — אי-עמידה במינימום אינה מאפסת את תמריץ המנהל", () => {
+  // זה היה הבאג: הסכום כולו אופס. עכשיו רק התעריף לעסקה נשאר בסיסי.
   const r = calcManagerIncentive(
-    manager({ group: "hyundai", target: 43, actual: 45, deals: 4 })
+    manager({ group: "hyundai", target: 43, actual: 45, regularDeals: 4 })
   );
-  assert.equal(r.tier!.id, "above", "המדרגה נקבעת גם כשאין זכאות");
   assert.equal(r.meetsMin, false);
-  assert.equal(r.dealsShort, 1, "חסרה עסקה אחת");
-  assert.equal(r.baseAmount, 0);
-  assert.equal(r.certainTotal, 0);
+  assert.equal(r.dealsShort, 1);
+  assert.equal(r.managerAmount, 2000, "תמריץ המנהל נשאר על כנו");
+  assert.equal(r.regularRate, 125, "התעריף לעסקה נשאר בסיסי");
+  assert.equal(r.total, 2500);
   assert.ok(
-    r.explanation.some((l) => l.includes("חסרה עסקה אחת")),
-    "הניסוח חייב להתאים במין ובמספר"
+    r.explanation.some((l) => l.includes("תמריץ המנהל אינו מתאפס")),
+    "ההסבר חייב לומר במפורש שהתמריץ אינו מתאפס"
   );
 });
 
-test("בדיקה 8 — יעד משתנה ללא מינימום עסקאות", () => {
+test("מנהל — ביצוע נמוך ביותר מ-2 נק׳: תמריץ המנהל 0, אך העסקאות משולמות", () => {
   const r = calcManagerIncentive(
-    manager({ group: "hyundai", target: 43, actual: 45, deals: 4, variableGoalReached: true })
-  );
-  assert.equal(r.certainTotal, 0, "התמריץ הוודאי אפס");
-  assert.equal(r.variableBonus, 0, "הבונוס אינו נכנס לוודאי");
-  assert.equal(r.pendingBonus, 500);
-  assert.equal(r.potentialTotal, 500);
-  assert.equal(r.needsReview, true);
-});
-
-test("בדיקה 9 — ביצוע נמוך ביותר מ-2 נק׳ מהיעד: 0 ₪", () => {
-  const r = calcManagerIncentive(
-    manager({ group: "mitsubishi", target: 43, actual: 40.9, deals: 5 })
+    manager({ group: "mitsubishi", target: 43, actual: 40.9, regularDeals: 5 })
   );
   assert.equal(r.tier!.id, "none");
-  assert.equal(r.certainTotal, 0);
+  assert.equal(r.managerAmount, 0);
+  assert.equal(r.regularAmount, 5 * 125, "תמריץ העסקאות אינו תלוי במדרגת המנהל");
+  assert.equal(r.total, 625);
 });
 
 test("בדיקה 10 — שדה יעד ריק: אין חישוב ואין הנחת 43%", () => {
@@ -165,10 +168,10 @@ test("בדיקה 10 — שדה יעד ריק: אין חישוב ואין הנח�
   assert.equal(a.total, 0);
   assert.match(a.message!, /יש להזין את יעד המימון/);
 
-  const m = calcManagerIncentive(manager({ target: null, actual: 45, deals: 9 }));
+  const m = calcManagerIncentive(manager({ target: null, actual: 45, regularDeals: 9 }));
   assert.equal(m.ok, false);
   assert.equal(m.tier, null);
-  assert.equal(m.certainTotal, 0);
+  assert.equal(m.total, 0);
 });
 
 // ═══ גבולות המדרגות ══════════════════════════════════════════
@@ -279,20 +282,28 @@ test("קלט — ביצוע ריק ויעד קיים: עדיין אין חישו
   assert.equal(r.total, 0);
 });
 
-test("קלט — מנהל עם אפס עסקאות אינו זכאי", () => {
-  const r = calcManagerIncentive(manager({ target: 43, actual: 45, deals: 0 }));
+test("קלט — מנהל עם אפס עסקאות מקבל את תמריץ המנהל בלבד", () => {
+  const r = calcManagerIncentive(manager({ target: 43, actual: 45, regularDeals: 0 }));
   assert.equal(r.meetsMin, false);
   assert.equal(r.dealsShort, 5);
-  assert.equal(r.certainTotal, 0);
+  assert.equal(r.dealsAmount, 0);
+  assert.equal(r.total, 2000, "רכיב הביצוע עומד בפני עצמו");
 });
 
 test("קלט — ערכים עשרוניים ביעד ובביצוע נתמכים", () => {
   const r = calcManagerIncentive(
-    manager({ group: "hyundai", target: 42, actual: 44.3, deals: 6, variableGoalReached: true })
+    manager({
+      group: "hyundai",
+      target: 42,
+      actual: 44.3,
+      regularDeals: 6,
+      variableGoalReached: true,
+    })
   );
   assert.ok(Math.abs(r.gapPts! - 2.3) < 1e-9);
   assert.equal(r.tier!.id, "above");
-  assert.equal(r.certainTotal, 2500);
+  // 2,000 + 6×250 + 500
+  assert.equal(r.total, 4000);
   assert.ok(r.explanation.some((l) => l.includes("2.3")));
 });
 
@@ -328,4 +339,130 @@ test("מקור הנתונים — המדרגות עולות ולא יורדות"
   assert.ok(AGENT_TIERS.onTarget.regular < AGENT_TIERS.above.regular);
   assert.ok(MANAGER_TIERS.below.amount < MANAGER_TIERS.onTarget.amount);
   assert.ok(MANAGER_TIERS.onTarget.amount < MANAGER_TIERS.above.amount);
+});
+
+// ═══ תמריץ מנהל: שני רכיבים מצטברים ══════════════════════════
+// המינימום משפיע רק על התעריף לעסקה, ולא מאפס את תמריץ המנהל.
+
+test("דוגמה מרכזית — 65.9% מול יעד 43%, 4 עסקאות: 2,500 ₪", () => {
+  const r = calcManagerIncentive(
+    manager({ group: "hyundai", target: 43, actual: 65.9, regularDeals: 4, extraDeals: 0 })
+  );
+  assert.ok(Math.abs(r.gapPts! - 22.9) < 1e-9, "פער של 22.9 נקודות אחוז");
+  assert.equal(r.managerAmount, 2000, "תמריץ מנהל");
+  assert.equal(r.meetsMin, false, "4 מתוך 5 — המינימום לא הושג");
+  assert.equal(r.regularRate, 125, "ולכן התעריף נשאר בסיסי");
+  assert.equal(r.dealsAmount, 500, "4 × 125");
+  assert.equal(r.variableBonus, 0);
+  assert.equal(r.total, 2500);
+});
+
+test("דוגמה מרכזית — אין רכיב נוסף שלא הוגדר", () => {
+  // בפועל התקבל 2,650 ₪, אך מקור 150 ₪ הנוספים אינו ידוע ולכן
+  // אינו חלק מהלוגיקה. הבדיקה מוודאת שלא נוסף רכיב מומצא.
+  const r = calcManagerIncentive(
+    manager({ group: "hyundai", target: 43, actual: 65.9, regularDeals: 4 })
+  );
+  assert.equal(r.managerAmount + r.dealsAmount + r.variableBonus, r.total);
+  assert.notEqual(r.total, 2650);
+});
+
+test("בדיקה 1 — יונדאי/O&J, מינימום הושג ו-2 נק׳ מעל היעד: 3,250 ₪", () => {
+  const r = calcManagerIncentive(
+    manager({ group: "hyundai", target: 43, actual: 45, regularDeals: 5 })
+  );
+  assert.equal(r.managerAmount, 2000);
+  assert.equal(r.meetsMin, true);
+  assert.equal(r.regularRate, 250, "המינימום הושג — התעריף עולה עם המדרגה");
+  assert.equal(r.dealsAmount, 1250);
+  assert.equal(r.total, 3250);
+});
+
+test("בדיקה 2 — יונדאי/O&J, המינימום לא הושג ובעמידה ביעד: 1,500 ₪", () => {
+  const r = calcManagerIncentive(
+    manager({ group: "hyundai", target: 43, actual: 44, regularDeals: 4 })
+  );
+  assert.equal(r.managerAmount, 1000, "תמריץ המנהל לפי המדרגה, בלי קשר למינימום");
+  assert.equal(r.meetsMin, false);
+  assert.equal(r.regularRate, 125);
+  assert.equal(r.dealsAmount, 500);
+  assert.equal(r.total, 1500);
+});
+
+test("בדיקה 3 — מיצובישי/אורה, המינימום הושג ובעמידה ביעד: 1,575 ₪", () => {
+  const r = calcManagerIncentive(
+    manager({ group: "mitsubishi", target: 43, actual: 44, regularDeals: 2, extraDeals: 1 })
+  );
+  assert.equal(r.totalDeals, 3, "רגיל + Extra Lease יחד");
+  assert.equal(r.meetsMin, true);
+  assert.equal(r.managerAmount, 1000);
+  assert.equal(r.regularAmount, 350, "2 × 175");
+  assert.equal(r.extraAmount, 225, "1 × 225");
+  assert.equal(r.total, 1575);
+});
+
+test("בדיקה 4 — מיצובישי/אורה, המינימום לא הושג: 2,300 ₪", () => {
+  const r = calcManagerIncentive(
+    manager({ group: "mitsubishi", target: 43, actual: 45, regularDeals: 1, extraDeals: 1 })
+  );
+  assert.equal(r.totalDeals, 2);
+  assert.equal(r.meetsMin, false, "2 מתוך 3");
+  assert.equal(r.managerAmount, 2000);
+  assert.equal(r.regularAmount, 125);
+  assert.equal(r.extraAmount, 175);
+  assert.equal(r.total, 2300);
+});
+
+test("בדיקה 5 — הדוגמה המרכזית עם יעד משתנה: 3,000 ₪", () => {
+  const r = calcManagerIncentive(
+    manager({
+      group: "hyundai",
+      target: 43,
+      actual: 65.9,
+      regularDeals: 4,
+      variableGoalReached: true,
+    })
+  );
+  assert.equal(r.managerAmount, 2000);
+  assert.equal(r.dealsAmount, 500);
+  assert.equal(r.variableBonus, 500);
+  assert.equal(r.total, 3000);
+});
+
+test("מנהל — הבונוס המשתנה אינו מותנה עוד במינימום העסקאות", () => {
+  // שינוי מכוון מול הכלל הקודם, לפי בדיקה 5
+  const withMin = calcManagerIncentive(
+    manager({ target: 43, actual: 45, regularDeals: 5, variableGoalReached: true })
+  );
+  const withoutMin = calcManagerIncentive(
+    manager({ target: 43, actual: 45, regularDeals: 4, variableGoalReached: true })
+  );
+  assert.equal(withMin.variableBonus, 500);
+  assert.equal(withoutMin.variableBonus, 500, "הבונוס ניתן גם בלי מינימום");
+});
+
+test("מנהל — סך התמריץ הוא בדיוק סכום שלושת הרכיבים", () => {
+  for (const actual of [40, 41.5, 43, 44.9, 45, 60]) {
+    for (const regularDeals of [0, 1, 4, 5, 9]) {
+      for (const variableGoalReached of [false, true]) {
+        const r = calcManagerIncentive(
+          manager({ target: 43, actual, regularDeals, extraDeals: 2, variableGoalReached })
+        );
+        assert.equal(
+          r.total,
+          r.managerAmount + r.regularAmount + r.extraAmount + r.variableBonus,
+          `${actual}% · ${regularDeals} עסקאות`
+        );
+      }
+    }
+  }
+});
+
+test("מנהל — התעריף לעסקה זהה לטבלת הסוכן", () => {
+  // התעריפים נקראים ממקור אחד; אם התוכנית תפריד ביניהם, זו הבדיקה שתיפול
+  assert.equal(managerDealTierFor(0, true).regular, AGENT_TIERS.onTarget.regular);
+  assert.equal(managerDealTierFor(3, true).extra, AGENT_TIERS.above.extra);
+  assert.equal(managerDealTierFor(-5, true).regular, AGENT_TIERS.base.regular);
+  // בלי מינימום — תמיד הבסיס, גם כשהביצוע מצוין
+  assert.equal(managerDealTierFor(20, false).id, "base");
 });

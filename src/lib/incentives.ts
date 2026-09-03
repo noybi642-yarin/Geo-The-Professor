@@ -197,7 +197,8 @@ export interface ManagerInput {
   group: ManagerGroupId;
   target: number | null;
   actual: number | null;
-  deals: number;
+  regularDeals: number;
+  extraDeals: number;
   variableGoalReached: boolean;
   variableGoalName?: string;
 }
@@ -209,23 +210,35 @@ export interface ManagerResult {
   target: number | null;
   actual: number | null;
   gapPts: number | null;
+  /** מדרגת תמריץ המנהל לפי הביצוע מול היעד */
   tier: ManagerTier | null;
+
+  // ── עסקאות ──
   minDeals: number;
-  deals: number;
+  regularDeals: number;
+  extraDeals: number;
+  /** רגיל + Extra Lease — זהו המספר שנבדק מול המינימום */
+  totalDeals: number;
   meetsMin: boolean;
   /** כמה עסקאות חסרות למינימום */
   dealsShort: number;
-  /** התמריץ הרגיל בפועל — 0 כשלא הושג המינימום */
-  baseAmount: number;
-  /** בונוס משתנה ודאי */
+
+  // ── התעריף שנבחר לכל עסקה ──
+  /** מדרגת התעריף בפועל: מדרגת הביצוע, או הבסיס כשאין מינימום */
+  rateTier: AgentTier | null;
+  regularRate: number;
+  extraRate: number;
+
+  // ── רכיבי התמריץ ──
+  /** רכיב א׳ — לפי הביצוע מול היעד. אינו מתאפס בשל המינימום. */
+  managerAmount: number;
+  /** רכיב ג׳ — תמריץ פר-עסקה */
+  regularAmount: number;
+  extraAmount: number;
+  dealsAmount: number;
+  /** רכיב ד׳ */
   variableBonus: number;
-  /** סך ודאי */
-  certainTotal: number;
-  /** בונוס שזכאותו טעונה בדיקה */
-  pendingBonus: number;
-  /** הסכום אם הזכאות תאושר */
-  potentialTotal: number;
-  needsReview: boolean;
+  total: number;
   explanation: string[];
 }
 
@@ -359,25 +372,47 @@ export function calcAgentIncentive(input: AgentInput): AgentResult {
 // ─── חישוב תמריץ המנהל ─────────────────────────────────────────
 
 /**
- * התמריץ למנהל הוא סכום כולל ואינו מוכפל במספר העסקאות.
+ * התעריף לכל עסקת מימון של המנהל.
  *
- * כשלא הושג מינימום העסקאות אך כן הושג יעד משתנה, הבונוס אינו
- * נכנס לסכום הוודאי: לא ידוע בוודאות אם הוא מגיע במצב הזה, ולכן
- * הוא מוצג בנפרד כסכום שזכאותו טעונה בדיקה.
+ * טבלת התעריפים זהה לזו של הסוכן — כך הוגדרה התוכנית — ולכן היא
+ * נקראת מאותו מקור ולא מוקלדת פעמיים. אם התוכנית תפריד ביניהן
+ * בעתיד, כאן המקום להגדיר טבלה נפרדת.
+ *
+ * כשלא הושג מינימום העסקאות התעריף נשאר הבסיסי ואינו עולה עם
+ * מדרגת הביצוע. זו כל ההשפעה של המינימום.
+ */
+export function managerDealTierFor(gapPts: number, meetsMin: boolean): AgentTier {
+  return meetsMin ? agentTierFor(gapPts) : AGENT_TIERS.base;
+}
+
+/**
+ * תמריץ מנהל אולם — שני רכיבים מצטברים ובונוס:
+ *
+ *   א. תמריץ לפי הביצוע מול היעד (סכום כולל, לא לעסקה)
+ *   ג. תמריץ פר-עסקת מימון
+ *   ד. בונוס יעד משתנה
+ *
+ * אי-עמידה במינימום העסקאות **אינה מאפסת** את רכיב א׳. היא משפיעה
+ * רק על התעריף שנבחר ברכיב ג׳: הוא נשאר הבסיסי במקום לעלות עם
+ * מדרגת הביצוע.
  */
 export function calcManagerIncentive(input: ManagerInput): ManagerResult {
   const group = MANAGER_GROUPS[input.group] ?? MANAGER_GROUPS.hyundai;
-  const deals = Math.max(0, Math.floor(input.deals || 0));
+  const regularDeals = Math.max(0, Math.floor(input.regularDeals || 0));
+  const extraDeals = Math.max(0, Math.floor(input.extraDeals || 0));
+  const totalDeals = regularDeals + extraDeals;
   const minDeals = group.minDeals;
-  const meetsMin = deals >= minDeals;
-  const dealsShort = Math.max(0, minDeals - deals);
+  const meetsMin = totalDeals >= minDeals;
+  const dealsShort = Math.max(0, minDeals - totalDeals);
 
   const base = {
     group,
     target: input.target,
     actual: input.actual,
     minDeals,
-    deals,
+    regularDeals,
+    extraDeals,
+    totalDeals,
     meetsMin,
     dealsShort,
   };
@@ -389,24 +424,29 @@ export function calcManagerIncentive(input: ManagerInput): ManagerResult {
       message: MISSING_INPUT_MESSAGE,
       gapPts: null,
       tier: null,
-      baseAmount: 0,
+      rateTier: null,
+      regularRate: 0,
+      extraRate: 0,
+      managerAmount: 0,
+      regularAmount: 0,
+      extraAmount: 0,
+      dealsAmount: 0,
       variableBonus: 0,
-      certainTotal: 0,
-      pendingBonus: 0,
-      potentialTotal: 0,
-      needsReview: false,
+      total: 0,
       explanation: [],
     };
   }
 
   const gapPts = input.actual - input.target;
   const tier = managerTierFor(gapPts);
+  const rateTier = managerDealTierFor(gapPts, meetsMin);
 
-  const baseAmount = meetsMin ? tier.amount : 0;
-  const variableBonus = meetsMin && input.variableGoalReached ? MANAGER_VARIABLE_BONUS : 0;
-  const certainTotal = baseAmount + variableBonus;
-  const pendingBonus = !meetsMin && input.variableGoalReached ? MANAGER_VARIABLE_BONUS : 0;
-  const potentialTotal = certainTotal + pendingBonus;
+  const managerAmount = tier.amount;
+  const regularAmount = regularDeals * rateTier.regular;
+  const extraAmount = extraDeals * rateTier.extra;
+  const dealsAmount = regularAmount + extraAmount;
+  const variableBonus = input.variableGoalReached ? MANAGER_VARIABLE_BONUS : 0;
+  const total = managerAmount + dealsAmount + variableBonus;
 
   const goalName = input.variableGoalName?.trim();
   const explanation: string[] = [
@@ -414,51 +454,56 @@ export function calcManagerIncentive(input: ManagerInput): ManagerResult {
     `יעד המימון: ${fmtPts(input.target)}%`,
     `ביצוע בפועל: ${fmtPts(input.actual)}%`,
     tier.id === "none"
-      ? `${gapSentence(gapPts)} — יותר מ-${TIER_STEP_PTS} נקודות אחוז מתחת ליעד, ולכן אין תמריץ רגיל.`
-      : `${gapSentence(gapPts)} ולכן מדרגת התמריץ היא ${fmtIls(tier.amount)}.`,
+      ? `${gapSentence(gapPts)} — יותר מ-${TIER_STEP_PTS} נקודות אחוז מתחת ליעד, ולכן תמריץ המנהל הוא ${fmtIls(0)}.`
+      : `${gapSentence(gapPts)} ולכן תמריץ המנהל הוא ${fmtIls(managerAmount)}.`,
   ];
 
   if (meetsMin) {
-    explanation.push(`הושג מינימום של ${dealsWord(minDeals)} מימון.`);
-  } else {
     explanation.push(
-      `לא הושג מינימום העסקאות הנדרש: הוזנו ${dealsWord(deals)} מתוך ${dealsWord(minDeals)} — ${missingDealsWord(dealsShort)}.`
+      `הושג מינימום העסקאות (${dealsWord(totalDeals)} מתוך ${dealsWord(minDeals)}), ולכן התעריף לעסקה הוא לפי מדרגת ${rateTier.label}.`
+    );
+  } else {
+    explanation.push(MIN_NOT_MET_NOTE);
+    explanation.push(
+      `הוזנו ${dealsWord(totalDeals)} מתוך ${dealsWord(minDeals)} — ${missingDealsWord(dealsShort)}.`
     );
   }
 
-  if (variableBonus > 0) {
+  if (regularDeals > 0)
+    explanation.push(
+      `${dealsWord(regularDeals)} מימון רגיל × ${fmtIls(rateTier.regular)} = ${fmtIls(regularAmount)}`
+    );
+  if (extraDeals > 0)
+    explanation.push(
+      `${dealsWord(extraDeals)} Extra Lease × ${fmtIls(rateTier.extra)} = ${fmtIls(extraAmount)}`
+    );
+  if (variableBonus > 0)
     explanation.push(
       `בונוס יעד משתנה${goalName ? ` (${goalName})` : ""}: ${fmtIls(variableBonus)}`
     );
-  }
-  if (pendingBonus > 0) {
-    explanation.push(
-      `בונוס משתנה אפשרי${goalName ? ` (${goalName})` : ""}: ${fmtIls(pendingBonus)} — הזכאות טעונה בדיקה.`
-    );
-  }
 
-  explanation.push(`סך התמריץ הוודאי: ${fmtIls(certainTotal)}`);
-  if (pendingBonus > 0) {
-    explanation.push(`סכום אפשרי לאחר אישור הזכאות: ${fmtIls(potentialTotal)}`);
-  }
+  explanation.push(`סך התמריץ הצפוי: ${fmtIls(total)}`);
 
   return {
     ...base,
     ok: true,
     gapPts,
     tier,
-    baseAmount,
+    rateTier,
+    regularRate: rateTier.regular,
+    extraRate: rateTier.extra,
+    managerAmount,
+    regularAmount,
+    extraAmount,
+    dealsAmount,
     variableBonus,
-    certainTotal,
-    pendingBonus,
-    potentialTotal,
-    needsReview: pendingBonus > 0,
+    total,
     explanation,
   };
 }
 
-export const PENDING_BONUS_NOTE =
-  "הזכאות לבונוס המשתנה ללא עמידה במינימום העסקאות דורשת בדיקה.";
+export const MIN_NOT_MET_NOTE =
+  "מינימום העסקאות לא הושג, ולכן תמריץ העסקאות חושב לפי התעריף הבסיסי. תמריץ המנהל אינו מתאפס.";
 
 export const INCENTIVE_FOOTNOTE =
   "החישוב מבוסס על נתוני התמריצים שהוזנו במרכז הידע. במקרה של שינוי בתוכנית התמריצים, יש לפעול לפי הנוהל המעודכן של החברה.";

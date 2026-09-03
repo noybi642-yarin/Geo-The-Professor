@@ -8,7 +8,7 @@ import {
   MANAGER_GROUPS,
   MANAGER_GROUP_ORDER,
   MANAGER_VARIABLE_BONUS,
-  PENDING_BONUS_NOTE,
+  MIN_NOT_MET_NOTE,
   calcAgentIncentive,
   calcManagerIncentive,
   dealsWord,
@@ -57,7 +57,6 @@ const EMPTY = {
   actual: "",
   regularDeals: "",
   extraDeals: "",
-  managerDeals: "",
   managerGoalReached: false,
   managerGoalName: "",
 };
@@ -145,11 +144,20 @@ export default function IncentiveCalc() {
         group,
         target: toNullable(f.target),
         actual: toNullable(f.actual),
-        deals: parseNum(f.managerDeals),
+        regularDeals: parseNum(f.regularDeals),
+        extraDeals: parseNum(f.extraDeals),
         variableGoalReached: f.managerGoalReached,
         variableGoalName: f.managerGoalName,
       }),
-    [group, f.target, f.actual, f.managerDeals, f.managerGoalReached, f.managerGoalName]
+    [
+      group,
+      f.target,
+      f.actual,
+      f.regularDeals,
+      f.extraDeals,
+      f.managerGoalReached,
+      f.managerGoalName,
+    ]
   );
 
   const res = role === "agent" ? agent : manager;
@@ -195,7 +203,7 @@ export default function IncentiveCalc() {
         <div className="mode-desc">
           {role === "agent"
             ? "התמריץ מחושב לכל עסקה, לפי מדרגת העמידה ביעד, בתוספת יעדים משתנים."
-            : "התמריץ הוא סכום כולל ואינו מוכפל במספר העסקאות, ומותנה במינימום עסקאות."}
+            : "שני רכיבים מצטברים: תמריץ לפי הביצוע מול היעד, ותמריץ לכל עסקת מימון. המינימום קובע רק את התעריף לעסקה."}
         </div>
       </section>
 
@@ -242,32 +250,20 @@ export default function IncentiveCalc() {
             suffix="%"
             placeholder="לדוגמה: 44.3"
           />
-          {role === "agent" ? (
-            <>
-              <NumInput
-                label="עסקאות מימון רגיל"
-                value={f.regularDeals}
-                onChange={(v) => set({ regularDeals: v })}
-                suffix="עסקאות"
-                integer
-              />
-              <NumInput
-                label="עסקאות Extra Lease"
-                value={f.extraDeals}
-                onChange={(v) => set({ extraDeals: v })}
-                suffix="עסקאות"
-                integer
-              />
-            </>
-          ) : (
-            <NumInput
-              label="מספר עסקאות המימון"
-              value={f.managerDeals}
-              onChange={(v) => set({ managerDeals: v })}
-              suffix="עסקאות"
-              integer
-            />
-          )}
+          <NumInput
+            label="עסקאות מימון רגיל"
+            value={f.regularDeals}
+            onChange={(v) => set({ regularDeals: v })}
+            suffix="עסקאות"
+            integer
+          />
+          <NumInput
+            label="עסקאות Extra Lease"
+            value={f.extraDeals}
+            onChange={(v) => set({ extraDeals: v })}
+            suffix="עסקאות"
+            integer
+          />
         </div>
 
         {role === "manager" && (
@@ -523,44 +519,66 @@ function ManagerResultView({ res }: { res: ReturnType<typeof calcManagerIncentiv
         <span className="badge tier-badge">{res.tier!.label}</span>
       </div>
 
+      {/* המינימום אינו מאפס דבר — ההודעה מסבירה בדיוק מה כן השתנה */}
       {!res.meetsMin && (
-        <div className="alert alert-out" style={{ marginBottom: 14 }}>
-          <IconInfo size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
-          לא הושג מינימום העסקאות הנדרש לקבלת תמריץ — הוזנו {dealsWord(res.deals)} מתוך{" "}
-          {dealsWord(res.minDeals)}, {missingDealsWord(res.dealsShort)}.
-        </div>
-      )}
-
-      <div className="result-hero">
-        <span className="hero-label">תמריץ ודאי</span>
-        <span className="hero-value">{fmtIls(res.certainTotal)}</span>
-        <span className="hero-sub">
-          {res.meetsMin ? `מדרגת ${res.tier!.label}` : "מותנה בעמידה במינימום העסקאות"}
-        </span>
-      </div>
-
-      {res.needsReview && (
         <div className="alert alert-bdm" style={{ marginBottom: 14 }}>
           <IconInfo size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
           <span>
-            בונוס משתנה אפשרי: <b>{fmtIls(res.pendingBonus)}</b> · סכום אפשרי לאחר אישור
-            הזכאות: <b>{fmtIls(res.potentialTotal)}</b>. {PENDING_BONUS_NOTE}
+            {MIN_NOT_MET_NOTE} הוזנו {dealsWord(res.totalDeals)} מתוך{" "}
+            {dealsWord(res.minDeals)}, {missingDealsWord(res.dealsShort)}.
           </span>
         </div>
       )}
 
+      <div className="result-hero">
+        <span className="hero-label">סך התמריץ הצפוי</span>
+        <span className="hero-value">{fmtIls(res.total)}</span>
+        <span className="hero-sub">
+          תמריץ מנהל {fmtIls(res.managerAmount)} · עסקאות {fmtIls(res.dealsAmount)}
+          {res.variableBonus > 0 ? ` · בונוס ${fmtIls(res.variableBonus)}` : ""}
+        </span>
+      </div>
+
+      <h3 className="subhead">עסקאות ותעריף</h3>
       <div className="result-list">
-        <ResultLine label="מדרגת התמריץ" value={fmtIls(res.tier!.amount)} />
         <ResultLine
-          label="עסקאות מימון"
-          value={`${res.deals} מתוך ${res.minDeals} נדרשות`}
+          label="מינימום עסקאות נדרש"
+          value={dealsWord(res.minDeals)}
         />
-        <ResultLine label="תמריץ רגיל" value={fmtIls(res.baseAmount)} />
-        <ResultLine label="בונוס משתנה" value={fmtIls(res.variableBonus)} />
-        <ResultLine label="תמריץ ודאי" value={fmtIls(res.certainTotal)} strong />
-        {res.needsReview && (
-          <ResultLine label="סכום אפשרי לאחר בדיקה" value={fmtIls(res.potentialTotal)} />
-        )}
+        <ResultLine
+          label="סך עסקאות המימון"
+          value={`${res.totalDeals} (רגיל ${res.regularDeals} · Extra Lease ${res.extraDeals})`}
+        />
+        <ResultLine
+          label="עמידה במינימום"
+          value={res.meetsMin ? "כן" : "לא"}
+          good={res.meetsMin}
+        />
+        <ResultLine
+          label="תעריף למימון רגיל"
+          value={fmtIls(res.regularRate)}
+        />
+        <ResultLine label="תעריף ל-Extra Lease" value={fmtIls(res.extraRate)} />
+      </div>
+
+      <h3 className="subhead" style={{ marginTop: 18 }}>
+        רכיבי התמריץ
+      </h3>
+      <div className="result-list">
+        <ResultLine
+          label={`תמריץ מנהל — ${res.tier!.label}`}
+          value={fmtIls(res.managerAmount)}
+        />
+        <ResultLine
+          label={`תמריץ מימון רגיל (${dealsWord(res.regularDeals)})`}
+          value={fmtIls(res.regularAmount)}
+        />
+        <ResultLine
+          label={`תמריץ Extra Lease (${dealsWord(res.extraDeals)})`}
+          value={fmtIls(res.extraAmount)}
+        />
+        <ResultLine label="בונוס יעד משתנה" value={fmtIls(res.variableBonus)} />
+        <ResultLine label="סך התמריץ הצפוי" value={fmtIls(res.total)} strong />
       </div>
     </>
   );
@@ -570,13 +588,15 @@ function ResultLine({
   label,
   value,
   strong,
+  good,
 }: {
   label: string;
   value: string;
   strong?: boolean;
+  good?: boolean;
 }) {
   return (
-    <div className={`result-row${strong ? " strong" : ""}`}>
+    <div className={`result-row${strong ? " strong" : ""}${good ? " good" : ""}`}>
       <span className="result-label">{label}</span>
       <span className="result-value">{value}</span>
     </div>
