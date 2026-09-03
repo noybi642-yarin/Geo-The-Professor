@@ -38,6 +38,7 @@ import {
   Table2,
   TrendingDown,
   TrendingUp,
+  Trophy,
   Truck,
   Unlock,
   User,
@@ -80,6 +81,7 @@ export const IconMoney = Banknote;
 export const IconResults = Banknote;
 export const IconOpenBanking = Unlock;
 export const IconStar = Sparkles;
+export const IconIncentives = Trophy;
 
 /** פעולות ומצבים */
 export const IconBack = ArrowRight;

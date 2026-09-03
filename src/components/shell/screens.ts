@@ -15,6 +15,7 @@ import {
   IconDownPayment,
   IconFinPct,
   IconHome,
+  IconIncentives,
   IconIndex,
   IconInterest,
   IconKnowledge,
@@ -38,6 +39,7 @@ export type ScreenId =
   | "spread"
   | "tracks"
   | "knowledge"
+  | "incentives"
   | "interest"
   | "finpct"
   | "down"
@@ -100,6 +102,14 @@ export const TOOL_SCREENS: ScreenMeta[] = [
   },
 ];
 
+/** מחשבון התמריצים — יושב לצד מרכז הידע, כי הכללים חיים שם */
+export const INCENTIVE_SCREEN: ScreenMeta = {
+  id: "incentives",
+  icon: IconIncentives,
+  title: "כמה אקבל בתמריץ?",
+  desc: "מחשבון תמריצים לסוכן ולמנהל אולם — לפי מדרגות היעד",
+};
+
 export const KNOWLEDGE_SCREEN: ScreenMeta = {
   id: "knowledge",
   icon: IconKnowledge,
@@ -118,6 +128,7 @@ export const SCREENS: ScreenMeta[] = [
   ...ALL_CALCS,
   ...TOOL_SCREENS,
   KNOWLEDGE_SCREEN,
+  INCENTIVE_SCREEN,
 ];
 
 export const getScreen = (id: ScreenId): ScreenMeta =>
@@ -203,6 +214,12 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: KNOWLEDGE_SCREEN.icon,
         screen: "knowledge",
       },
+      {
+        key: "incentives",
+        label: "מחשבון תמריצים",
+        icon: INCENTIVE_SCREEN.icon,
+        screen: "incentives",
+      },
     ],
   },
   {
@@ -227,7 +244,7 @@ export const BOTTOM_NAV: { key: string; label: string; icon: LucideIcon; screen:
 
 /** לאיזה פריט בניווט התחתון שייך כל מסך */
 export function bottomNavKeyFor(screen: ScreenId): string {
-  if (screen === "knowledge") return "knowledge";
+  if (screen === "knowledge" || screen === "incentives") return "knowledge";
   if (ALL_CALCS.some((c) => c.id === screen) || screen === "calculators") return "calculators";
   if (TOOL_SCREENS.some((t) => t.id === screen) || screen === "tools") return "tools";
   return "home";
@@ -236,7 +253,7 @@ export function bottomNavKeyFor(screen: ScreenId): string {
 /** שם הקבוצה שאליה שייך המסך — מוצג בסרגל העליון כהקשר ניווט */
 export function sectionLabelFor(screen: ScreenId): string {
   if (screen === "home") return "ראשי";
-  if (screen === "knowledge") return "ידע מקצועי";
+  if (screen === "knowledge" || screen === "incentives") return "ידע מקצועי";
   if (QUICK_CALCS.some((c) => c.id === screen)) return "מחשבונים מהירים";
   if (PRIMARY_CALCS.some((c) => c.id === screen) || screen === "calculators")
     return "מחשבונים";

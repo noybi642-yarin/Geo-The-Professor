@@ -1311,6 +1311,13 @@ textarea {
   border-radius: var(--r-sm);
 }
 
+/* המדרגה שהושגה — התג היחיד שנושא צבע מלא, כדי שייקרא ראשון */
+.badge.tier-badge {
+  background: var(--brand-900);
+  color: #fff;
+  font-weight: 600;
+}
+
 /* ── Tooltip ── */
 
 .tip-wrap {
@@ -1891,6 +1898,16 @@ textarea {
 
 .kb-back {
   align-self: flex-start;
+}
+
+/* מעבר מדף ידע אל המחשבון שמיישם אותו */
+.kb-calc-link {
+  border-color: var(--brand-mint-dim);
+  background: var(--accent-soft);
+}
+
+.kb-calc-link .tile-icon {
+  background: var(--card);
 }
 
 .kb-item-title {
