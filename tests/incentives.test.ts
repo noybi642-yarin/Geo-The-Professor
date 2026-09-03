@@ -9,6 +9,7 @@ import {
   MANAGER_GROUPS,
   MANAGER_TIERS,
   MANAGER_VARIABLE_BONUS,
+  PENDING_BONUS_NOTE,
   TIER_STEP_PTS,
   agentTierFor,
   calcAgentIncentive,
@@ -118,8 +119,11 @@ test("מנהל — מעל היעד, מינימום הושג, עם יעד משת�
   assert.equal(r.tier!.id, "above");
   assert.equal(r.managerAmount, 2000);
   assert.equal(r.regularAmount, 1250);
-  assert.equal(r.variableBonus, 500);
+  assert.equal(r.variableBonus, 500, "המינימום הושג — הבונוס ודאי");
+  assert.equal(r.pendingBonus, 0);
+  assert.equal(r.needsReview, false);
   assert.equal(r.total, 3750);
+  assert.equal(r.potentialTotal, 3750);
 });
 
 test("מנהל — מיצובישי/אורה מתחת ליעד, מינימום הושג", () => {
@@ -363,8 +367,10 @@ test("דוגמה מרכזית — אין רכיב נוסף שלא הוגדר", (
   const r = calcManagerIncentive(
     manager({ group: "hyundai", target: 43, actual: 65.9, regularDeals: 4 })
   );
-  assert.equal(r.managerAmount + r.dealsAmount + r.variableBonus, r.total);
+  assert.equal(r.managerAmount + r.dealsAmount + r.variableBonus, r.certainTotal);
+  assert.equal(r.total, r.certainTotal);
   assert.notEqual(r.total, 2650);
+  assert.notEqual(r.potentialTotal, 2650);
 });
 
 test("בדיקה 1 — יונדאי/O&J, מינימום הושג ו-2 נק׳ מעל היעד: 3,250 ₪", () => {
@@ -413,7 +419,7 @@ test("בדיקה 4 — מיצובישי/אורה, המינימום לא הושג
   assert.equal(r.total, 2300);
 });
 
-test("בדיקה 5 — הדוגמה המרכזית עם יעד משתנה: 3,000 ₪", () => {
+test("בדיקה 5 — הדוגמה המרכזית עם יעד משתנה: 2,500 ₪ ודאי, 3,000 ₪ אפשרי", () => {
   const r = calcManagerIncentive(
     manager({
       group: "hyundai",
@@ -425,34 +431,71 @@ test("בדיקה 5 — הדוגמה המרכזית עם יעד משתנה: 3,000
   );
   assert.equal(r.managerAmount, 2000);
   assert.equal(r.dealsAmount, 500);
-  assert.equal(r.variableBonus, 500);
-  assert.equal(r.total, 3000);
+  assert.equal(r.meetsMin, false, "4 מתוך 5");
+  assert.equal(r.variableBonus, 0, "בלי מינימום — הבונוס אינו ודאי");
+  assert.equal(r.pendingBonus, 500);
+  assert.equal(r.needsReview, true);
+  assert.equal(r.certainTotal, 2500);
+  assert.equal(r.total, 2500, "המספר הראשי הוא הסכום הוודאי");
+  assert.equal(r.potentialTotal, 3000);
 });
 
-test("מנהל — הבונוס המשתנה אינו מותנה עוד במינימום העסקאות", () => {
-  // שינוי מכוון מול הכלל הקודם, לפי בדיקה 5
+test("מנהל — הבונוס המשתנה ודאי רק כשהושג מינימום העסקאות", () => {
   const withMin = calcManagerIncentive(
     manager({ target: 43, actual: 45, regularDeals: 5, variableGoalReached: true })
   );
   const withoutMin = calcManagerIncentive(
     manager({ target: 43, actual: 45, regularDeals: 4, variableGoalReached: true })
   );
-  assert.equal(withMin.variableBonus, 500);
-  assert.equal(withoutMin.variableBonus, 500, "הבונוס ניתן גם בלי מינימום");
+
+  assert.equal(withMin.variableBonus, 500, "עם מינימום — הבונוס ודאי");
+  assert.equal(withMin.pendingBonus, 0);
+  assert.equal(withMin.needsReview, false);
+  assert.equal(withMin.potentialTotal, withMin.certainTotal, "אין מה לאשר");
+
+  assert.equal(withoutMin.variableBonus, 0, "בלי מינימום — אינו נכנס לוודאי");
+  assert.equal(withoutMin.pendingBonus, 500, "אך גם אינו נשלל");
+  assert.equal(withoutMin.needsReview, true);
+  assert.equal(withoutMin.potentialTotal, withoutMin.certainTotal + 500);
 });
 
-test("מנהל — סך התמריץ הוא בדיוק סכום שלושת הרכיבים", () => {
+test("מנהל — בלי יעד משתנה אין בונוס ממתין, גם בלי מינימום", () => {
+  const r = calcManagerIncentive(
+    manager({ target: 43, actual: 45, regularDeals: 4, variableGoalReached: false })
+  );
+  assert.equal(r.meetsMin, false);
+  assert.equal(r.pendingBonus, 0);
+  assert.equal(r.needsReview, false);
+  assert.equal(r.potentialTotal, r.certainTotal);
+});
+
+test("מנהל — הפירוט מציין את הבונוס הממתין ואת ההערה", () => {
+  const r = calcManagerIncentive(
+    manager({ target: 43, actual: 65.9, regularDeals: 4, variableGoalReached: true })
+  );
+  assert.ok(r.explanation.some((l) => l.includes("התמריץ הוודאי")));
+  assert.ok(r.explanation.some((l) => l.includes("בונוס משתנה אפשרי")));
+  assert.ok(r.explanation.some((l) => l.includes("סכום אפשרי לאחר אישור זכאות")));
+  assert.ok(r.explanation.includes(PENDING_BONUS_NOTE));
+});
+
+test("מנהל — התמריץ הוודאי הוא בדיוק סכום שלושת הרכיבים", () => {
   for (const actual of [40, 41.5, 43, 44.9, 45, 60]) {
     for (const regularDeals of [0, 1, 4, 5, 9]) {
       for (const variableGoalReached of [false, true]) {
         const r = calcManagerIncentive(
           manager({ target: 43, actual, regularDeals, extraDeals: 2, variableGoalReached })
         );
+        const label = `${actual}% · ${regularDeals} עסקאות · ${variableGoalReached}`;
         assert.equal(
-          r.total,
+          r.certainTotal,
           r.managerAmount + r.regularAmount + r.extraAmount + r.variableBonus,
-          `${actual}% · ${regularDeals} עסקאות`
+          label
         );
+        assert.equal(r.total, r.certainTotal, label);
+        assert.equal(r.potentialTotal, r.certainTotal + r.pendingBonus, label);
+        // הבונוס נופל לצד אחד בלבד — לעולם לא נספר פעמיים
+        assert.ok(r.variableBonus === 0 || r.pendingBonus === 0, label);
       }
     }
   }

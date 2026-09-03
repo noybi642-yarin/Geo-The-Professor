@@ -9,6 +9,7 @@ import {
   MANAGER_GROUP_ORDER,
   MANAGER_VARIABLE_BONUS,
   MIN_NOT_MET_NOTE,
+  PENDING_BONUS_NOTE,
   calcAgentIncentive,
   calcManagerIncentive,
   dealsWord,
@@ -531,13 +532,26 @@ function ManagerResultView({ res }: { res: ReturnType<typeof calcManagerIncentiv
       )}
 
       <div className="result-hero">
-        <span className="hero-label">סך התמריץ הצפוי</span>
-        <span className="hero-value">{fmtIls(res.total)}</span>
+        <span className="hero-label">
+          {res.needsReview ? "התמריץ הוודאי" : "סך התמריץ הצפוי"}
+        </span>
+        <span className="hero-value">{fmtIls(res.certainTotal)}</span>
         <span className="hero-sub">
           תמריץ מנהל {fmtIls(res.managerAmount)} · עסקאות {fmtIls(res.dealsAmount)}
           {res.variableBonus > 0 ? ` · בונוס ${fmtIls(res.variableBonus)}` : ""}
         </span>
       </div>
+
+      {/* הבונוס אינו נשלל — הוא פשוט אינו ודאי, ולכן מוצג בנפרד */}
+      {res.needsReview && (
+        <div className="alert alert-bdm" style={{ marginTop: 14, marginBottom: 4 }}>
+          <IconInfo size={ICON_SM} strokeWidth={ICON_STROKE} aria-hidden />
+          <span>
+            בונוס משתנה אפשרי: <b>{fmtIls(res.pendingBonus)}</b>. סכום אפשרי לאחר אישור
+            זכאות: <b>{fmtIls(res.potentialTotal)}</b>. {PENDING_BONUS_NOTE}
+          </span>
+        </div>
+      )}
 
       <h3 className="subhead">עסקאות ותעריף</h3>
       <div className="result-list">
@@ -578,7 +592,21 @@ function ManagerResultView({ res }: { res: ReturnType<typeof calcManagerIncentiv
           value={fmtIls(res.extraAmount)}
         />
         <ResultLine label="בונוס יעד משתנה" value={fmtIls(res.variableBonus)} />
-        <ResultLine label="סך התמריץ הצפוי" value={fmtIls(res.total)} strong />
+        <ResultLine
+          label={res.needsReview ? "תמריץ ודאי" : "סך התמריץ הצפוי"}
+          value={fmtIls(res.certainTotal)}
+          strong
+        />
+        {res.needsReview && (
+          <>
+            <ResultLine label="בונוס משתנה אפשרי" value={fmtIls(res.pendingBonus)} />
+            <ResultLine
+              label="סכום אפשרי לאחר אישור זכאות"
+              value={fmtIls(res.potentialTotal)}
+              strong
+            />
+          </>
+        )}
       </div>
     </>
   );

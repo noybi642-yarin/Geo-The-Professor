@@ -236,8 +236,17 @@ export interface ManagerResult {
   regularAmount: number;
   extraAmount: number;
   dealsAmount: number;
-  /** רכיב ד׳ */
+  /** רכיב ד׳ — בונוס יעד משתנה ודאי (רק כשהושג מינימום העסקאות) */
   variableBonus: number;
+  /** בונוס יעד משתנה שזכאותו טעונה בדיקה — אינו נכלל בסכום הוודאי */
+  pendingBonus: number;
+  /** האם יש רכיב הממתין לאישור זכאות */
+  needsReview: boolean;
+  /** התמריץ הוודאי — רכיב א׳ + רכיב ג׳ + בונוס ודאי */
+  certainTotal: number;
+  /** הסכום האפשרי לאחר אישור זכאות — הוודאי + הבונוס הממתין */
+  potentialTotal: number;
+  /** התמריץ הוודאי. זהו המספר הראשי שמוצג. */
   total: number;
   explanation: string[];
 }
@@ -393,8 +402,10 @@ export function managerDealTierFor(gapPts: number, meetsMin: boolean): AgentTier
  *   ד. בונוס יעד משתנה
  *
  * אי-עמידה במינימום העסקאות **אינה מאפסת** את רכיב א׳. היא משפיעה
- * רק על התעריף שנבחר ברכיב ג׳: הוא נשאר הבסיסי במקום לעלות עם
- * מדרגת הביצוע.
+ * על שני דברים בלבד:
+ *   • התעריף שנבחר ברכיב ג׳ נשאר הבסיסי במקום לעלות עם מדרגת הביצוע.
+ *   • רכיב ד׳ אינו נשלל, אך אינו ודאי: הוא מוצג בנפרד כבונוס אפשרי
+ *     שזכאותו טעונה בדיקה, ואינו נכלל בסכום הוודאי.
  */
 export function calcManagerIncentive(input: ManagerInput): ManagerResult {
   const group = MANAGER_GROUPS[input.group] ?? MANAGER_GROUPS.hyundai;
@@ -432,6 +443,10 @@ export function calcManagerIncentive(input: ManagerInput): ManagerResult {
       extraAmount: 0,
       dealsAmount: 0,
       variableBonus: 0,
+      pendingBonus: 0,
+      needsReview: false,
+      certainTotal: 0,
+      potentialTotal: 0,
       total: 0,
       explanation: [],
     };
@@ -445,8 +460,18 @@ export function calcManagerIncentive(input: ManagerInput): ManagerResult {
   const regularAmount = regularDeals * rateTier.regular;
   const extraAmount = extraDeals * rateTier.extra;
   const dealsAmount = regularAmount + extraAmount;
-  const variableBonus = input.variableGoalReached ? MANAGER_VARIABLE_BONUS : 0;
-  const total = managerAmount + dealsAmount + variableBonus;
+
+  // הבונוס ודאי רק כשהושג מינימום העסקאות. בלי מינימום הוא אינו
+  // נשלל — הוא נשאר בהמתנה לאישור זכאות, מחוץ לסכום הוודאי.
+  const variableBonus =
+    input.variableGoalReached && meetsMin ? MANAGER_VARIABLE_BONUS : 0;
+  const pendingBonus =
+    input.variableGoalReached && !meetsMin ? MANAGER_VARIABLE_BONUS : 0;
+  const needsReview = pendingBonus > 0;
+
+  const certainTotal = managerAmount + dealsAmount + variableBonus;
+  const potentialTotal = certainTotal + pendingBonus;
+  const total = certainTotal;
 
   const goalName = input.variableGoalName?.trim();
   const explanation: string[] = [
@@ -482,7 +507,15 @@ export function calcManagerIncentive(input: ManagerInput): ManagerResult {
       `בונוס יעד משתנה${goalName ? ` (${goalName})` : ""}: ${fmtIls(variableBonus)}`
     );
 
-  explanation.push(`סך התמריץ הצפוי: ${fmtIls(total)}`);
+  explanation.push(`התמריץ הוודאי: ${fmtIls(certainTotal)}`);
+
+  if (pendingBonus > 0) {
+    explanation.push(
+      `בונוס משתנה אפשרי${goalName ? ` (${goalName})` : ""}: ${fmtIls(pendingBonus)}`
+    );
+    explanation.push(`סכום אפשרי לאחר אישור זכאות: ${fmtIls(potentialTotal)}`);
+    explanation.push(PENDING_BONUS_NOTE);
+  }
 
   return {
     ...base,
@@ -497,6 +530,10 @@ export function calcManagerIncentive(input: ManagerInput): ManagerResult {
     extraAmount,
     dealsAmount,
     variableBonus,
+    pendingBonus,
+    needsReview,
+    certainTotal,
+    potentialTotal,
     total,
     explanation,
   };
@@ -504,6 +541,9 @@ export function calcManagerIncentive(input: ManagerInput): ManagerResult {
 
 export const MIN_NOT_MET_NOTE =
   "מינימום העסקאות לא הושג, ולכן תמריץ העסקאות חושב לפי התעריף הבסיסי. תמריץ המנהל אינו מתאפס.";
+
+export const PENDING_BONUS_NOTE =
+  "הזכאות לבונוס המשתנה ללא עמידה במינימום העסקאות דורשת בדיקה.";
 
 export const INCENTIVE_FOOTNOTE =
   "החישוב מבוסס על נתוני התמריצים שהוזנו במרכז הידע. במקרה של שינוי בתוכנית התמריצים, יש לפעול לפי הנוהל המעודכן של החברה.";
