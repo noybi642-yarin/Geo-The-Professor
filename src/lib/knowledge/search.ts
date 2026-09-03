@@ -92,6 +92,7 @@ function groupText(g: DocGroup): string[] {
     g.footnote ? normalize(g.footnote) : "",
     ...(g.items ?? []).map(normalize),
     ...(g.alternatives ?? []).map(normalize),
+    ...(g.table ? [...g.table.head, ...g.table.rows.flat()].map(normalize) : []),
     ...(g.options ?? []).flatMap((o) => [normalize(o.label), ...o.items.map(normalize)]),
   ];
 }

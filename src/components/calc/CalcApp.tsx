@@ -14,6 +14,7 @@ import {
 import AppShell from "@/components/shell/AppShell";
 import {
   DATA_ROUTES,
+  INCENTIVE_SCREEN,
   KNOWLEDGE_SCREEN,
   PRIMARY_CALCS,
   QUICK_CALCS,
@@ -29,6 +30,7 @@ import { Modal, PageHead, ToastContext } from "./shared";
 import LoanCalc from "./LoanCalc";
 import BalloonSpreadCalc from "./BalloonSpreadCalc";
 import IndexCalc from "./IndexCalc";
+import IncentiveCalc from "./IncentiveCalc";
 import KnowledgeCenter from "./KnowledgeCenter";
 import LiveDataCard from "./LiveDataCard";
 import SetupFeeCalc from "./SetupFeeCalc";
@@ -168,6 +170,10 @@ export default function CalcApp() {
                     meta={KNOWLEDGE_SCREEN}
                     onOpen={() => setScreen(KNOWLEDGE_SCREEN.id)}
                   />
+                  <ScreenTile
+                    meta={INCENTIVE_SCREEN}
+                    onOpen={() => setScreen(INCENTIVE_SCREEN.id)}
+                  />
                   {TOOL_SCREENS.map((t) => (
                     <ScreenTile key={t.id} meta={t} onOpen={() => setScreen(t.id)} />
                   ))}
@@ -225,6 +231,10 @@ export default function CalcApp() {
                     meta={KNOWLEDGE_SCREEN}
                     onOpen={() => setScreen(KNOWLEDGE_SCREEN.id)}
                   />
+                  <ScreenTile
+                    meta={INCENTIVE_SCREEN}
+                    onOpen={() => setScreen(INCENTIVE_SCREEN.id)}
+                  />
                   {TOOL_SCREENS.map((t) => (
                     <ScreenTile key={t.id} meta={t} onOpen={() => setScreen(t.id)} />
                   ))}
@@ -266,7 +276,10 @@ export default function CalcApp() {
           {screen === "index" && <IndexCalc />}
           {screen === "spread" && <BalloonSpreadCalc settings={settings} />}
           {screen === "tracks" && <TracksInfo />}
-          {screen === "knowledge" && <KnowledgeCenter />}
+          {screen === "knowledge" && (
+            <KnowledgeCenter onOpenIncentiveCalc={() => setScreen("incentives")} />
+          )}
+          {screen === "incentives" && <IncentiveCalc />}
           {screen === "interest" && <InterestCalc settings={settings} />}
           {screen === "finpct" && <FinPctCalc />}
           {screen === "down" && <DownCalc settings={settings} />}

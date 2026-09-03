@@ -35,11 +35,13 @@ const allText = (itemId: string) =>
 
 // ─── רישום ומבנה ───────────────────────────────────────────────
 
-test("רישום — שני מקורות ידע בלבד, בסדר הנכון", () => {
-  assert.equal(KNOWLEDGE_SOURCES.length, 2);
-  assert.equal(KNOWLEDGE_SOURCES[0].id, "finance-contract");
-  assert.equal(KNOWLEDGE_SOURCES[1].id, "client-documents");
+test("רישום — שלושה מקורות ידע, בסדר הנכון", () => {
+  assert.deepEqual(
+    KNOWLEDGE_SOURCES.map((s) => s.id),
+    ["finance-contract", "client-documents", "incentives"]
+  );
   assert.equal(getSource("client-documents")?.title, "מסמכים לפי סוג לקוח");
+  assert.equal(getSource("incentives")?.title, "תמריצים לסוכנים ולמנהלי אולם");
 });
 
 test("מבנה — תצוגת טאבים וארבעה סוגי לקוח", () => {

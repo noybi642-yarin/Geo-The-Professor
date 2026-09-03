@@ -19,6 +19,7 @@ import {
   IconClientDocs,
   IconContract,
   IconCopyToClient,
+  IconIncentives,
   IconInfo,
   IconKnowledge,
   IconOpenBanking,
@@ -35,6 +36,7 @@ import { useToast } from "./shared";
 const SOURCE_ICONS: Record<string, LucideIcon> = {
   "finance-contract": IconContract,
   "client-documents": IconClientDocs,
+  incentives: IconIncentives,
 };
 
 const sourceIcon = (id: string): LucideIcon => SOURCE_ICONS[id] ?? IconKnowledge;
@@ -69,7 +71,12 @@ function tierPreview(tier: DocTier | undefined): string | null {
  * מקור מוצג לפי view שלו: categories (חוזה מימון) או tabs (מסמכים
  * לפי סוג לקוח). הנתונים נטענים פעם אחת — הם חלק מהבאנדל.
  */
-export default function KnowledgeCenter() {
+export default function KnowledgeCenter({
+  onOpenIncentiveCalc,
+}: {
+  /** פתיחת מחשבון התמריצים — מוצג רק כשהמסך שלו זמין */
+  onOpenIncentiveCalc?: () => void;
+} = {}) {
   const [openSource, setOpenSource] = useState<string | null>(
     KNOWLEDGE_SOURCES.length === 1 ? KNOWLEDGE_SOURCES[0].id : null
   );
@@ -198,7 +205,15 @@ export default function KnowledgeCenter() {
 
   if (source.view === "tabs") {
     return (
-      <TabsView source={source} initialItem={jumpTo} initialTier={jumpTier} onBack={back} />
+      <TabsView
+        source={source}
+        initialItem={jumpTo}
+        initialTier={jumpTier}
+        onBack={back}
+        onOpenIncentiveCalc={
+          source.id === "incentives" ? onOpenIncentiveCalc : undefined
+        }
+      />
     );
   }
 
@@ -212,11 +227,13 @@ function TabsView({
   initialItem,
   initialTier,
   onBack,
+  onOpenIncentiveCalc,
 }: {
   source: KnowledgeSource;
   initialItem?: string | null;
   initialTier?: string | null;
   onBack?: () => void;
+  onOpenIncentiveCalc?: () => void;
 }) {
   const [active, setActive] = useState(
     initialItem && source.items.some((i) => i.id === initialItem)
@@ -283,6 +300,20 @@ function TabsView({
         </section>
       )}
 
+      {onOpenIncentiveCalc && (
+        <button type="button" className="sn-tile kb-calc-link" onClick={onOpenIncentiveCalc}>
+          <span className="tile-icon" aria-hidden>
+            <IconIncentives size={ICON_MD} strokeWidth={ICON_STROKE} />
+          </span>
+          <span className="tile-body">
+            <span className="tile-title">כמה אקבל בתמריץ?</span>
+            <span className="tile-desc">
+              מחשבון התמריצים — לפי אותן מדרגות שמופיעות כאן
+            </span>
+          </span>
+        </button>
+      )}
+
       <section className="panel">
         <div className="track-tabs kb-tabs" role="tablist" aria-label="סוג לקוח">
           {source.items.map((it) => (
@@ -339,6 +370,30 @@ function TabsView({
                   <li key={x}>{x}</li>
                 ))}
               </ul>
+            )}
+
+            {/* טבלת מדרגות — נקראת טוב יותר משורות רשימה */}
+            {g.table && (
+              <div className="table-wrap">
+                <table className="schedule cpi-table">
+                  <thead>
+                    <tr>
+                      {g.table.head.map((h) => (
+                        <th key={h}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {g.table.rows.map((row, ri) => (
+                      <tr key={ri}>
+                        {row.map((cell, ci) => (
+                          <td key={ci}>{cell}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
 
             {/* מסמכים חליפיים — אחד מהם מספיק */}

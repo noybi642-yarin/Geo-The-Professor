@@ -22,6 +22,15 @@ export interface DocOption {
   items: string[];
 }
 
+/**
+ * טבלה קצרה בתוך קבוצה — למדרגות ולסכומים, שנקראים הרבה יותר טוב
+ * בשורות ועמודות מאשר ברשימה.
+ */
+export interface DocTable {
+  head: string[];
+  rows: string[][];
+}
+
 /** קבוצת דרישות מסמכים — לתצוגה סרוקה ומהירה */
 export interface DocGroup {
   title: string;
@@ -34,6 +43,8 @@ export interface DocGroup {
    * ביניהם. שונה מ-options, שמציג בלוקים שלמים זה מול זה.
    */
   alternatives?: string[];
+  /** טבלת מדרגות או סכומים */
+  table?: DocTable;
   /** חלופות — מוצגות עם ״או״ ביניהן */
   options?: DocOption[];
   /** הערת שוליים מתחת לקבוצה */
