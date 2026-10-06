@@ -429,7 +429,9 @@ textarea {
   bottom: 0;
   z-index: 40;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* נגזר ממספר הפריטים בפועל, כדי שהוספת מסך לא תשבור את הסרגל */
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   background: var(--brand-900);
   padding-bottom: env(safe-area-inset-bottom);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -2423,6 +2425,158 @@ textarea {
   line-height: 1.65;
   border-radius: var(--r-sm);
   padding: 10px var(--s-3);
+}
+
+/* ── יעדי החודש ── */
+
+/*
+   ארבעה שדות קצרים. שתי עמודות כבר במובייל, כדי שאזור הקלט
+   יישאר נמוך ולוח המחוונים ייראה בלי גלילה.
+*/
+.mt-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--s-3) var(--s-4);
+}
+
+.mt-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-2);
+  background: var(--brand-900);
+  color: #fff;
+  border-radius: var(--r-lg);
+  border-inline-start: 3px solid var(--brand-mint);
+  padding: var(--s-4) var(--s-6);
+  margin-bottom: var(--s-4);
+  animation: pop-in 0.2s ease both;
+}
+
+.mt-hero.empty {
+  background: var(--surface-2);
+  color: var(--text-2);
+  border-inline-start-color: var(--line-strong);
+}
+
+/* האחוז הוא המספר הדומיננטי במסך */
+.mt-pct-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+}
+
+.mt-pct {
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mt-pct-label {
+  font-size: 14px;
+  color: var(--on-brand-dim);
+}
+
+/* ── פס ההתקדמות ── */
+
+.mt-bar {
+  position: relative;
+  width: 100%;
+  height: 10px;
+  margin-top: var(--s-1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.mt-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--brand-mint);
+  transition: width 0.3s ease;
+}
+
+/*
+   סימון הקצב הנדרש: איפה ההתקדמות הייתה אמורה לעמוד היום.
+   הפער בינו לבין קצה הפס הוא התשובה ל״האם אני בקצב״.
+*/
+.mt-bar-mark {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  border-radius: 1px;
+  background: #fff;
+  opacity: 0.8;
+}
+
+.mt-bar-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-3);
+  font-size: 12px;
+  color: var(--on-brand-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.mt-bar-expected {
+  opacity: 0.85;
+}
+
+/* ── ההודעה האישית ── */
+
+.mt-headline {
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: var(--s-2);
+}
+
+.mt-sub {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--on-brand-dim);
+}
+
+.mt-hero.empty .mt-headline {
+  color: var(--text);
+}
+
+.mt-hero.empty .mt-sub {
+  color: var(--text-2);
+}
+
+/* ── מצב מול הקצב ── */
+
+.mt-pace {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin-top: var(--s-2);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.mt-pace.pace-behind {
+  background: rgba(211, 47, 47, 0.22);
+  border-color: rgba(255, 138, 128, 0.45);
+}
+
+.mt-pace.pace-ahead {
+  background: rgba(146, 205, 139, 0.2);
+  border-color: rgba(146, 205, 139, 0.45);
+}
+
+/* הסימון הוא אלמנט נפרד, ולכן מיקומו ב-RTL אינו תלוי בדו-כיווניות */
+.mt-pace-mark {
+  font-size: 11px;
+  line-height: 1;
 }
 
 /* ═══ תצוגות ותגובתיות ═══════════════════════════════════════ */

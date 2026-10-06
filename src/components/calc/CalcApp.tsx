@@ -18,6 +18,7 @@ import {
   KNOWLEDGE_SCREEN,
   PRIMARY_CALCS,
   QUICK_CALCS,
+  TARGETS_SCREEN,
   TOOL_SCREENS,
   getScreen,
   sectionLabelFor,
@@ -28,6 +29,7 @@ import { ICON_MD, ICON_SM, ICON_STROKE, IconSettings } from "@/components/ui/ico
 import Link from "next/link";
 import { Modal, PageHead, ToastContext } from "./shared";
 import LoanCalc from "./LoanCalc";
+import MonthlyTargetsCalc from "./MonthlyTargetsCalc";
 import BalloonSpreadCalc from "./BalloonSpreadCalc";
 import IndexCalc from "./IndexCalc";
 import IncentiveCalc from "./IncentiveCalc";
@@ -155,6 +157,16 @@ export default function CalcApp() {
               <LiveDataCard />
 
               <div>
+                <h2 className="section-head">היעד שלי</h2>
+                <div className="sn-grid grid-fit">
+                  <ScreenTile
+                    meta={TARGETS_SCREEN}
+                    onOpen={() => setScreen(TARGETS_SCREEN.id)}
+                  />
+                </div>
+              </div>
+
+              <div>
                 <h2 className="section-head">מחשבונים מרכזיים</h2>
                 <div className="sn-grid">
                   {PRIMARY_CALCS.map((c) => (
@@ -225,6 +237,15 @@ export default function CalcApp() {
                 sub="מסלולי מימון, היסטוריית נתונים רשמיים והגדרות החישוב"
               />
               <div>
+                <h2 className="section-head">היעד שלי</h2>
+                <div className="sn-grid grid-fit">
+                  <ScreenTile
+                    meta={TARGETS_SCREEN}
+                    onOpen={() => setScreen(TARGETS_SCREEN.id)}
+                  />
+                </div>
+              </div>
+              <div>
                 <h2 className="section-head">מידע מקצועי</h2>
                 <div className="sn-grid grid-fit">
                   <ScreenTile
@@ -271,6 +292,7 @@ export default function CalcApp() {
             </div>
           )}
 
+          {screen === "targets" && <MonthlyTargetsCalc />}
           {screen === "loan" && <LoanCalc settings={settings} />}
           {screen === "subsidy" && <SubsidyCalc settings={settings} />}
           {screen === "index" && <IndexCalc />}

@@ -23,6 +23,7 @@ import {
   IconSettings,
   IconSetupFee,
   IconSubsidy,
+  IconTargets,
   IconTools,
   IconTracks,
   type LucideIcon,
@@ -31,6 +32,7 @@ import {
 /** מזהי המסכים שמוצגים בתוך העמוד הראשי */
 export type ScreenId =
   | "home"
+  | "targets"
   | "calculators"
   | "tools"
   | "loan"
@@ -110,6 +112,14 @@ export const INCENTIVE_SCREEN: ScreenMeta = {
   desc: "מחשבון תמריצים לסוכן ולמנהל אולם — לפי מדרגות היעד",
 };
 
+/** יעדי החודש — מעקב אישי אחר היעד הכספי והקצב היומי הנדרש */
+export const TARGETS_SCREEN: ScreenMeta = {
+  id: "targets",
+  icon: IconTargets,
+  title: "יעדי החודש",
+  desc: "היעד החודשי, הביצוע עד כה, הפער והקצב היומי הנדרש",
+};
+
 export const KNOWLEDGE_SCREEN: ScreenMeta = {
   id: "knowledge",
   icon: IconKnowledge,
@@ -125,6 +135,7 @@ export const INDEX_SCREENS: ScreenMeta[] = [
 
 export const SCREENS: ScreenMeta[] = [
   ...INDEX_SCREENS,
+  TARGETS_SCREEN,
   ...ALL_CALCS,
   ...TOOL_SCREENS,
   KNOWLEDGE_SCREEN,
@@ -182,7 +193,15 @@ export interface NavGroup {
 export const NAV_GROUPS: NavGroup[] = [
   {
     key: "main",
-    entries: [{ key: "home", label: "ראשי", icon: IconHome, screen: "home" }],
+    entries: [
+      { key: "home", label: "ראשי", icon: IconHome, screen: "home" },
+      {
+        key: "targets",
+        label: TARGETS_SCREEN.title,
+        icon: TARGETS_SCREEN.icon,
+        screen: "targets",
+      },
+    ],
   },
   {
     key: "calcs",
@@ -237,6 +256,7 @@ export const NAV_GROUPS: NavGroup[] = [
 /** ארבעת פריטי הניווט התחתון במובייל */
 export const BOTTOM_NAV: { key: string; label: string; icon: LucideIcon; screen: ScreenId }[] = [
   { key: "home", label: "ראשי", icon: IconHome, screen: "home" },
+  { key: "targets", label: "יעדים", icon: IconTargets, screen: "targets" },
   { key: "calculators", label: "מחשבונים", icon: IconCalculators, screen: "calculators" },
   { key: "knowledge", label: "ידע", icon: IconKnowledge, screen: "knowledge" },
   { key: "tools", label: "כלים", icon: IconTools, screen: "tools" },
@@ -244,6 +264,7 @@ export const BOTTOM_NAV: { key: string; label: string; icon: LucideIcon; screen:
 
 /** לאיזה פריט בניווט התחתון שייך כל מסך */
 export function bottomNavKeyFor(screen: ScreenId): string {
+  if (screen === "targets") return "targets";
   if (screen === "knowledge" || screen === "incentives") return "knowledge";
   if (ALL_CALCS.some((c) => c.id === screen) || screen === "calculators") return "calculators";
   if (TOOL_SCREENS.some((t) => t.id === screen) || screen === "tools") return "tools";
@@ -253,6 +274,7 @@ export function bottomNavKeyFor(screen: ScreenId): string {
 /** שם הקבוצה שאליה שייך המסך — מוצג בסרגל העליון כהקשר ניווט */
 export function sectionLabelFor(screen: ScreenId): string {
   if (screen === "home") return "ראשי";
+  if (screen === "targets") return TARGETS_SCREEN.title;
   if (screen === "knowledge" || screen === "incentives") return "ידע מקצועי";
   if (QUICK_CALCS.some((c) => c.id === screen)) return "מחשבונים מהירים";
   if (PRIMARY_CALCS.some((c) => c.id === screen) || screen === "calculators")
