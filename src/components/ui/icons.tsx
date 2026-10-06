@@ -36,6 +36,7 @@ import {
   Settings,
   Sparkles,
   Table2,
+  Target,
   TrendingDown,
   TrendingUp,
   Trophy,
@@ -55,6 +56,7 @@ export const IconHome = Home;
 export const IconCalculators = Calculator;
 export const IconKnowledge = BookOpen;
 export const IconTools = Wrench;
+export const IconTargets = Target;
 
 /** מחשבונים */
 export const IconDeal = Truck;
